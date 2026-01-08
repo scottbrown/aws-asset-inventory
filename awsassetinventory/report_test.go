@@ -255,3 +255,24 @@ func TestSortedRegions(t *testing.T) {
 		t.Errorf("sortedRegions()[2] = %v, want us-west-2", sorted[2])
 	}
 }
+
+func TestSortResources(t *testing.T) {
+	resources := []Resource{
+		{ResourceName: "zebra", ResourceID: "id-3"},
+		{ResourceName: "alpha", ResourceID: "id-2"},
+		{ResourceName: "alpha", ResourceID: "id-1"},
+	}
+
+	sortResources(resources)
+
+	// Should be sorted by name, then by ID: alpha/id-1, alpha/id-2, zebra/id-3
+	if resources[0].ResourceName != "alpha" || resources[0].ResourceID != "id-1" {
+		t.Errorf("sortResources()[0] = %v/%v, want alpha/id-1", resources[0].ResourceName, resources[0].ResourceID)
+	}
+	if resources[1].ResourceName != "alpha" || resources[1].ResourceID != "id-2" {
+		t.Errorf("sortResources()[1] = %v/%v, want alpha/id-2", resources[1].ResourceName, resources[1].ResourceID)
+	}
+	if resources[2].ResourceName != "zebra" || resources[2].ResourceID != "id-3" {
+		t.Errorf("sortResources()[2] = %v/%v, want zebra/id-3", resources[2].ResourceName, resources[2].ResourceID)
+	}
+}

@@ -156,6 +156,7 @@ func (rg *ReportGenerator) writeResourceDetails(w io.Writer) error {
 
 	for _, rt := range sortedTypes {
 		resources := grouped[rt]
+		sortResources(resources)
 
 		_, err = fmt.Fprintf(w, "### %s (%d)\n\n", rt, len(resources))
 		if err != nil {
@@ -219,6 +220,15 @@ func sortedRegions(countsByRegion map[Region]map[ResourceType]int) []Region {
 		return regions[i] < regions[j]
 	})
 	return regions
+}
+
+func sortResources(resources []Resource) {
+	sort.Slice(resources, func(i, j int) bool {
+		if resources[i].ResourceName != resources[j].ResourceName {
+			return resources[i].ResourceName < resources[j].ResourceName
+		}
+		return resources[i].ResourceID < resources[j].ResourceID
+	})
 }
 
 func escapeMarkdown(s string) string {
