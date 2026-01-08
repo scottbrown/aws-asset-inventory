@@ -276,3 +276,45 @@ func TestSortResources(t *testing.T) {
 		t.Errorf("sortResources()[2] = %v/%v, want zebra/id-3", resources[2].ResourceName, resources[2].ResourceID)
 	}
 }
+
+func TestReportGenerator_Generate_SummaryOnly(t *testing.T) {
+	inv := &Inventory{
+		CollectedAt: time.Date(2026, 1, 7, 15, 30, 0, 0, time.UTC),
+		Profile:     "test",
+		Regions:     []Region{"us-east-1"},
+		Resources: []Resource{
+			{
+				ResourceType: "AWS::EC2::Instance",
+				ResourceID:   "i-12345",
+				ResourceName: "web-server",
+				Region:       "us-east-1",
+			},
+		},
+	}
+	rg := NewReportGenerator(inv)
+	rg.SummaryOnly = true
+
+	var buf bytes.Buffer
+	err := rg.Generate(&buf)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	output := buf.String()
+
+	// Should have summary sections
+	if !strings.Contains(output, "## Summary") {
+		t.Error("Generate() with SummaryOnly should include Summary section")
+	}
+	if !strings.Contains(output, "## By Region") {
+		t.Error("Generate() with SummaryOnly should include By Region section")
+	}
+
+	// Should NOT have resource details
+	if strings.Contains(output, "## Resource Details") {
+		t.Error("Generate() with SummaryOnly should NOT include Resource Details section")
+	}
+	if strings.Contains(output, "web-server") {
+		t.Error("Generate() with SummaryOnly should NOT include individual resource names")
+	}
+}

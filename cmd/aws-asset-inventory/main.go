@@ -19,6 +19,7 @@ var (
 	reportFile      string
 	permissionsOnly bool
 	noReport        bool
+	summaryOnly     bool
 )
 
 func main() {
@@ -41,6 +42,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Path for JSON inventory output (use '-' for stdout)")
 	rootCmd.Flags().StringVar(&reportFile, "report", "", "Path for markdown report (use '-' for stdout)")
 	rootCmd.Flags().BoolVar(&noReport, "no-report", false, "Skip markdown report generation")
+	rootCmd.Flags().BoolVar(&summaryOnly, "summary-only", false, "Generate summary report without resource details")
 	rootCmd.Flags().BoolVar(&permissionsOnly, "permissions", false, "Print required AWS Config permissions and exit")
 }
 
@@ -118,7 +120,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	if !noReport {
-		if err := writeReport(inventory, reportFile); err != nil {
+		if err := writeReport(inventory, reportFile, summaryOnly); err != nil {
 			return fmt.Errorf("failed to write report: %w", err)
 		}
 	}
@@ -154,8 +156,9 @@ func writeJSONOutput(inv *awsassetinventory.Inventory, path string) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-func writeReport(inv *awsassetinventory.Inventory, path string) error {
+func writeReport(inv *awsassetinventory.Inventory, path string, summaryOnly bool) error {
 	rg := awsassetinventory.NewReportGenerator(inv)
+	rg.SummaryOnly = summaryOnly
 
 	if path == "" || path == "-" {
 		return rg.Generate(os.Stdout)
