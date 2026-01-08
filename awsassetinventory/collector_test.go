@@ -3,6 +3,7 @@ package awsassetinventory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -311,5 +312,71 @@ func TestCollector_Collect_NoResources(t *testing.T) {
 	}
 	if len(inv.Resources) != 0 {
 		t.Errorf("Collect() resources = %v, want 0", len(inv.Resources))
+	}
+}
+
+func TestCollector_Collect_WithLogger(t *testing.T) {
+	mock := &mockConfigClient{
+		getDiscoveredResourceCountsFunc: func(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error) {
+			return &configservice.GetDiscoveredResourceCountsOutput{
+				ResourceCounts: []types.ResourceCount{
+					{ResourceType: "AWS::EC2::Instance", Count: 1},
+				},
+			}, nil
+		},
+		listDiscoveredResourcesFunc: func(ctx context.Context, params *configservice.ListDiscoveredResourcesInput, optFns ...func(*configservice.Options)) (*configservice.ListDiscoveredResourcesOutput, error) {
+			return &configservice.ListDiscoveredResourcesOutput{
+				ResourceIdentifiers: []types.ResourceIdentifier{
+					{ResourceId: aws.String("i-12345"), ResourceName: aws.String("instance-1")},
+				},
+			}, nil
+		},
+		batchGetResourceConfigFunc: func(ctx context.Context, params *configservice.BatchGetResourceConfigInput, optFns ...func(*configservice.Options)) (*configservice.BatchGetResourceConfigOutput, error) {
+			return &configservice.BatchGetResourceConfigOutput{
+				BaseConfigurationItems: []types.BaseConfigurationItem{
+					{
+						ResourceType: "AWS::EC2::Instance",
+						ResourceId:   aws.String("i-12345"),
+						ResourceName: aws.String("instance-1"),
+						AccountId:    aws.String("123456789012"),
+					},
+				},
+			}, nil
+		},
+	}
+
+	var logs []string
+	factory := func(r Region) ConfigClient { return mock }
+	c := NewCollector("test", factory)
+	c.Logger = func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	_, err := c.Collect(context.Background(), []Region{"us-east-1"})
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+
+	if len(logs) == 0 {
+		t.Error("Logger should have been called")
+	}
+
+	// Verify expected log messages
+	hasStarting := false
+	hasCompleted := false
+	for _, log := range logs {
+		if strings.Contains(log, "Starting collection") {
+			hasStarting = true
+		}
+		if strings.Contains(log, "Completed with") {
+			hasCompleted = true
+		}
+	}
+
+	if !hasStarting {
+		t.Error("Logger should have logged 'Starting collection'")
+	}
+	if !hasCompleted {
+		t.Error("Logger should have logged 'Completed with'")
 	}
 }

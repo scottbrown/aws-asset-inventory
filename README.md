@@ -89,6 +89,9 @@ aws-asset-inventory --regions us-east-1 --output - --report report.md
 # Quick summary without resource details
 aws-asset-inventory --regions us-east-1 --summary-only
 
+# Verbose output for debugging
+aws-asset-inventory --regions us-east-1,us-west-2 --verbose
+
 # Print required AWS Config permissions (one per line)
 aws-asset-inventory --permissions
 ```
@@ -103,6 +106,7 @@ aws-asset-inventory --permissions
 | `--report` | | No | Path for markdown report (use `-` for stdout) |
 | `--no-report` | | No | Skip markdown report generation |
 | `--summary-only` | | No | Generate summary report without resource details |
+| `--verbose` | `-v` | No | Show detailed progress during collection |
 | `--permissions` | | No | Print required AWS Config permissions and exit |
 
 When `--profile` is omitted, the tool uses the [default AWS credential chain](https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/configuring-sdk.html), which checks (in order):

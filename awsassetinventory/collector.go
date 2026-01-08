@@ -21,10 +21,14 @@ type ConfigClient interface {
 // ConfigClientFactory creates ConfigClient instances for specific regions.
 type ConfigClientFactory func(region Region) ConfigClient
 
+// Logger is a callback for progress messages.
+type Logger func(format string, args ...any)
+
 // Collector gathers AWS resources from AWS Config across regions.
 type Collector struct {
 	profile       string
 	clientFactory ConfigClientFactory
+	Logger        Logger
 }
 
 // NewCollector creates a new Collector with the given AWS config and profile name.
@@ -84,6 +88,10 @@ func (c *Collector) Collect(ctx context.Context, regions []Region) (*Inventory, 
 }
 
 func (c *Collector) collectRegion(ctx context.Context, region Region) ([]Resource, error) {
+	if c.Logger != nil {
+		c.Logger("[%s] Starting collection", region)
+	}
+
 	client := c.clientFactory(region)
 	if client == nil {
 		return nil, fmt.Errorf("nil AWS Config client for region %s", region)
@@ -94,13 +102,24 @@ func (c *Collector) collectRegion(ctx context.Context, region Region) ([]Resourc
 		return nil, err
 	}
 
+	if c.Logger != nil {
+		c.Logger("[%s] Found %d resource types", region, len(resourceTypes))
+	}
+
 	var resources []Resource
 	for _, rt := range resourceTypes {
 		rtResources, err := c.collectResourceType(ctx, client, region, rt)
 		if err != nil {
 			return resources, err
 		}
+		if c.Logger != nil && len(rtResources) > 0 {
+			c.Logger("[%s] Collected %d %s", region, len(rtResources), rt)
+		}
 		resources = append(resources, rtResources...)
+	}
+
+	if c.Logger != nil {
+		c.Logger("[%s] Completed with %d resources", region, len(resources))
 	}
 
 	return resources, nil

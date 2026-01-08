@@ -20,6 +20,7 @@ var (
 	permissionsOnly bool
 	noReport        bool
 	summaryOnly     bool
+	verbose         bool
 )
 
 func main() {
@@ -43,6 +44,7 @@ func init() {
 	rootCmd.Flags().StringVar(&reportFile, "report", "", "Path for markdown report (use '-' for stdout)")
 	rootCmd.Flags().BoolVar(&noReport, "no-report", false, "Skip markdown report generation")
 	rootCmd.Flags().BoolVar(&summaryOnly, "summary-only", false, "Generate summary report without resource details")
+	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show detailed progress during collection")
 	rootCmd.Flags().BoolVar(&permissionsOnly, "permissions", false, "Print required AWS Config permissions and exit")
 }
 
@@ -97,6 +99,11 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	collector := awsassetinventory.NewCollector(profile, clientFactory)
+	if verbose {
+		collector.Logger = func(format string, args ...any) {
+			fmt.Fprintf(os.Stderr, format+"\n", args...)
+		}
+	}
 	inventory, err := collector.Collect(ctx, regionList)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: collection completed with errors: %v\n", err)
