@@ -3,6 +3,7 @@ package awsassetinventory
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -180,6 +181,22 @@ func TestCollector_Collect_ErrorHandling(t *testing.T) {
 	inv, err := c.Collect(context.Background(), []Region{"us-east-1"})
 	if err == nil {
 		t.Fatal("Collect() expected error, got nil")
+	}
+	if inv == nil {
+		t.Fatal("Collect() should return partial inventory even on error")
+	}
+}
+
+func TestCollector_Collect_NilClient(t *testing.T) {
+	factory := func(r Region) ConfigClient { return nil }
+	c := NewCollector("test", factory)
+
+	inv, err := c.Collect(context.Background(), []Region{"us-east-1"})
+	if err == nil {
+		t.Fatal("Collect() expected error for nil client, got nil")
+	}
+	if !strings.Contains(err.Error(), "us-east-1") {
+		t.Errorf("Collect() error = %v, want region context", err)
 	}
 	if inv == nil {
 		t.Fatal("Collect() should return partial inventory even on error")

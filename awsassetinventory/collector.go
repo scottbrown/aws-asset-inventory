@@ -3,6 +3,7 @@ package awsassetinventory
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -84,6 +85,9 @@ func (c *Collector) Collect(ctx context.Context, regions []Region) (*Inventory, 
 
 func (c *Collector) collectRegion(ctx context.Context, region Region) ([]Resource, error) {
 	client := c.clientFactory(region)
+	if client == nil {
+		return nil, fmt.Errorf("nil AWS Config client for region %s", region)
+	}
 
 	resourceTypes, err := c.discoverResourceTypes(ctx, client)
 	if err != nil {
