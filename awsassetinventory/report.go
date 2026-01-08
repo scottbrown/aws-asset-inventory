@@ -9,8 +9,8 @@ import (
 
 // ReportGenerator generates markdown reports from inventory data.
 type ReportGenerator struct {
-	inventory   *Inventory
-	SummaryOnly bool
+	inventory      *Inventory
+	IncludeDetails bool
 }
 
 // NewReportGenerator creates a new ReportGenerator for the given inventory.
@@ -29,7 +29,7 @@ func (rg *ReportGenerator) Generate(w io.Writer) error {
 	if err := rg.writeByRegion(w); err != nil {
 		return err
 	}
-	if !rg.SummaryOnly {
+	if rg.IncludeDetails {
 		if err := rg.writeResourceDetails(w); err != nil {
 			return err
 		}

@@ -86,8 +86,8 @@ aws-asset-inventory --regions us-east-1 --output - --no-report
 # JSON to stdout, report to file
 aws-asset-inventory --regions us-east-1 --output - --report report.md
 
-# Quick summary without resource details
-aws-asset-inventory --regions us-east-1 --summary-only
+# Full report with resource details
+aws-asset-inventory --regions us-east-1 --include-details
 
 # Verbose output for debugging
 aws-asset-inventory --regions us-east-1,us-west-2 --verbose
@@ -105,7 +105,7 @@ aws-asset-inventory --permissions
 | `--output` | `-o` | No | Path for JSON inventory output (use `-` for stdout) |
 | `--report` | | No | Path for markdown report (use `-` for stdout) |
 | `--no-report` | | No | Skip markdown report generation |
-| `--summary-only` | | No | Generate summary report without resource details |
+| `--include-details` | | No | Include resource details in report |
 | `--verbose` | `-v` | No | Show detailed progress during collection |
 | `--permissions` | | No | Print required AWS Config permissions and exit |
 
@@ -178,7 +178,7 @@ The markdown report includes:
 1. **Header** - Collection timestamp, profile, and regions
 2. **Summary** - Total resource counts by type
 3. **By Region** - Resource counts broken down by region
-4. **Resource Details** - Detailed listing of all resources
+4. **Resource Details** - Detailed listing of all resources (only with `--include-details`)
 
 ## Licence
 

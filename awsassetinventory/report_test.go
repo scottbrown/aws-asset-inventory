@@ -80,6 +80,7 @@ func TestReportGenerator_Generate_WithResources(t *testing.T) {
 		},
 	}
 	rg := NewReportGenerator(inv)
+	rg.IncludeDetails = true
 
 	var buf bytes.Buffer
 	err := rg.Generate(&buf)
@@ -111,13 +112,13 @@ func TestReportGenerator_Generate_WithResources(t *testing.T) {
 		t.Error("Generate() should include us-west-2 section")
 	}
 	if !strings.Contains(output, "## Resource Details") {
-		t.Error("Generate() should include resource details section")
+		t.Error("Generate() with IncludeDetails should include resource details section")
 	}
 	if !strings.Contains(output, "web-server-1") {
-		t.Error("Generate() should include resource names")
+		t.Error("Generate() with IncludeDetails should include resource names")
 	}
 	if !strings.Contains(output, "i-12345") {
-		t.Error("Generate() should include resource IDs")
+		t.Error("Generate() with IncludeDetails should include resource IDs")
 	}
 }
 
@@ -158,6 +159,7 @@ func TestReportGenerator_Generate_ResourceWithoutName(t *testing.T) {
 		},
 	}
 	rg := NewReportGenerator(inv)
+	rg.IncludeDetails = true
 
 	var buf bytes.Buffer
 	err := rg.Generate(&buf)
@@ -277,7 +279,7 @@ func TestSortResources(t *testing.T) {
 	}
 }
 
-func TestReportGenerator_Generate_SummaryOnly(t *testing.T) {
+func TestReportGenerator_Generate_DefaultAbridged(t *testing.T) {
 	inv := &Inventory{
 		CollectedAt: time.Date(2026, 1, 7, 15, 30, 0, 0, time.UTC),
 		Profile:     "test",
@@ -292,7 +294,6 @@ func TestReportGenerator_Generate_SummaryOnly(t *testing.T) {
 		},
 	}
 	rg := NewReportGenerator(inv)
-	rg.SummaryOnly = true
 
 	var buf bytes.Buffer
 	err := rg.Generate(&buf)
@@ -304,17 +305,57 @@ func TestReportGenerator_Generate_SummaryOnly(t *testing.T) {
 
 	// Should have summary sections
 	if !strings.Contains(output, "## Summary") {
-		t.Error("Generate() with SummaryOnly should include Summary section")
+		t.Error("Generate() default should include Summary section")
 	}
 	if !strings.Contains(output, "## By Region") {
-		t.Error("Generate() with SummaryOnly should include By Region section")
+		t.Error("Generate() default should include By Region section")
 	}
 
-	// Should NOT have resource details
+	// Should NOT have resource details by default
 	if strings.Contains(output, "## Resource Details") {
-		t.Error("Generate() with SummaryOnly should NOT include Resource Details section")
+		t.Error("Generate() default should NOT include Resource Details section")
 	}
 	if strings.Contains(output, "web-server") {
-		t.Error("Generate() with SummaryOnly should NOT include individual resource names")
+		t.Error("Generate() default should NOT include individual resource names")
+	}
+}
+
+func TestReportGenerator_Generate_IncludeDetails(t *testing.T) {
+	inv := &Inventory{
+		CollectedAt: time.Date(2026, 1, 7, 15, 30, 0, 0, time.UTC),
+		Profile:     "test",
+		Regions:     []Region{"us-east-1"},
+		Resources: []Resource{
+			{
+				ResourceType: "AWS::EC2::Instance",
+				ResourceID:   "i-12345",
+				ResourceName: "web-server",
+				Region:       "us-east-1",
+			},
+		},
+	}
+	rg := NewReportGenerator(inv)
+	rg.IncludeDetails = true
+
+	var buf bytes.Buffer
+	err := rg.Generate(&buf)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	output := buf.String()
+
+	// Should have all sections
+	if !strings.Contains(output, "## Summary") {
+		t.Error("Generate() with IncludeDetails should include Summary section")
+	}
+	if !strings.Contains(output, "## By Region") {
+		t.Error("Generate() with IncludeDetails should include By Region section")
+	}
+	if !strings.Contains(output, "## Resource Details") {
+		t.Error("Generate() with IncludeDetails should include Resource Details section")
+	}
+	if !strings.Contains(output, "web-server") {
+		t.Error("Generate() with IncludeDetails should include individual resource names")
 	}
 }
