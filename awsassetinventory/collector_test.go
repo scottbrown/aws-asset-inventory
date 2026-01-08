@@ -186,6 +186,116 @@ func TestCollector_Collect_ErrorHandling(t *testing.T) {
 	if inv == nil {
 		t.Fatal("Collect() should return partial inventory even on error")
 	}
+
+	var collectErrs CollectErrors
+	if !errors.As(err, &collectErrs) {
+		t.Fatal("Collect() error should be CollectErrors type")
+	}
+	if len(collectErrs.Errors) != 1 {
+		t.Errorf("CollectErrors should have 1 error, got %d", len(collectErrs.Errors))
+	}
+	if collectErrs.Errors[0].Region != "us-east-1" {
+		t.Errorf("CollectErrors region = %v, want us-east-1", collectErrs.Errors[0].Region)
+	}
+}
+
+func TestCollector_Collect_MultipleRegionErrors(t *testing.T) {
+	mock := &mockConfigClient{
+		getDiscoveredResourceCountsFunc: func(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error) {
+			return nil, errors.New("access denied")
+		},
+	}
+
+	factory := func(r Region) ConfigClient { return mock }
+	c := NewCollector("test", factory)
+
+	regions := []Region{"us-east-1", "us-west-2", "eu-west-1"}
+	inv, err := c.Collect(context.Background(), regions)
+	if err == nil {
+		t.Fatal("Collect() expected error, got nil")
+	}
+	if inv == nil {
+		t.Fatal("Collect() should return partial inventory even on error")
+	}
+
+	var collectErrs CollectErrors
+	if !errors.As(err, &collectErrs) {
+		t.Fatal("Collect() error should be CollectErrors type")
+	}
+	if len(collectErrs.Errors) != 3 {
+		t.Errorf("CollectErrors should have 3 errors, got %d", len(collectErrs.Errors))
+	}
+
+	failedRegions := collectErrs.Regions()
+	if len(failedRegions) != 3 {
+		t.Errorf("CollectErrors.Regions() should return 3 regions, got %d", len(failedRegions))
+	}
+}
+
+func TestCollector_Collect_PartialSuccess(t *testing.T) {
+	successMock := &mockConfigClient{
+		getDiscoveredResourceCountsFunc: func(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error) {
+			return &configservice.GetDiscoveredResourceCountsOutput{
+				ResourceCounts: []types.ResourceCount{
+					{ResourceType: "AWS::S3::Bucket", Count: 1},
+				},
+			}, nil
+		},
+		listDiscoveredResourcesFunc: func(ctx context.Context, params *configservice.ListDiscoveredResourcesInput, optFns ...func(*configservice.Options)) (*configservice.ListDiscoveredResourcesOutput, error) {
+			return &configservice.ListDiscoveredResourcesOutput{
+				ResourceIdentifiers: []types.ResourceIdentifier{
+					{ResourceId: aws.String("bucket-1")},
+				},
+			}, nil
+		},
+		batchGetResourceConfigFunc: func(ctx context.Context, params *configservice.BatchGetResourceConfigInput, optFns ...func(*configservice.Options)) (*configservice.BatchGetResourceConfigOutput, error) {
+			return &configservice.BatchGetResourceConfigOutput{
+				BaseConfigurationItems: []types.BaseConfigurationItem{
+					{
+						ResourceType: "AWS::S3::Bucket",
+						ResourceId:   aws.String("bucket-1"),
+						AccountId:    aws.String("123456789012"),
+					},
+				},
+			}, nil
+		},
+	}
+
+	failMock := &mockConfigClient{
+		getDiscoveredResourceCountsFunc: func(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error) {
+			return nil, errors.New("access denied")
+		},
+	}
+
+	factory := func(r Region) ConfigClient {
+		if r == "us-east-1" {
+			return successMock
+		}
+		return failMock
+	}
+	c := NewCollector("test", factory)
+
+	regions := []Region{"us-east-1", "us-west-2"}
+	inv, err := c.Collect(context.Background(), regions)
+
+	if err == nil {
+		t.Fatal("Collect() expected error for partial failure")
+	}
+
+	var collectErrs CollectErrors
+	if !errors.As(err, &collectErrs) {
+		t.Fatal("Collect() error should be CollectErrors type")
+	}
+	if len(collectErrs.Errors) != 1 {
+		t.Errorf("CollectErrors should have 1 error (us-west-2), got %d", len(collectErrs.Errors))
+	}
+	if collectErrs.Errors[0].Region != "us-west-2" {
+		t.Errorf("Failed region = %v, want us-west-2", collectErrs.Errors[0].Region)
+	}
+
+	if len(inv.Resources) != 1 {
+		t.Errorf("Inventory should have 1 resource from successful region, got %d", len(inv.Resources))
+	}
 }
 
 func TestCollector_Collect_NilClient(t *testing.T) {

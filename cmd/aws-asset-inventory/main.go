@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -106,7 +107,17 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	inventory, err := collector.Collect(ctx, regionList)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: collection completed with errors: %v\n", err)
+		var collectErrs awsassetinventory.CollectErrors
+		if errors.As(err, &collectErrs) {
+			failedRegions := collectErrs.Regions()
+			fmt.Fprintf(os.Stderr, "Warning: %d region(s) failed: %s\n",
+				len(failedRegions), strings.Join(regionStrings(failedRegions), ", "))
+			for _, re := range collectErrs.Errors {
+				fmt.Fprintf(os.Stderr, "  [%s] %v\n", re.Region, re.Err)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: collection completed with errors: %v\n", err)
+		}
 	}
 
 	fmt.Fprintf(os.Stderr, "Collected %d resources\n", inventory.ResourceCount())
@@ -183,4 +194,12 @@ func writeReport(inv *awsassetinventory.Inventory, path string, includeDetails b
 
 	fmt.Fprintf(os.Stderr, "Report written to: %s\n", path)
 	return nil
+}
+
+func regionStrings(regions []awsassetinventory.Region) []string {
+	strs := make([]string, len(regions))
+	for i, r := range regions {
+		strs[i] = r.String()
+	}
+	return strs
 }

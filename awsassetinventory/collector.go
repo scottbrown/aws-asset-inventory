@@ -67,12 +67,13 @@ func (c *Collector) Collect(ctx context.Context, regions []Region) (*Inventory, 
 		close(resultCh)
 	}()
 
-	var firstErr error
+	var regionErrors []RegionError
 	for result := range resultCh {
 		if result.Err != nil {
-			if firstErr == nil {
-				firstErr = result.Err
-			}
+			regionErrors = append(regionErrors, RegionError{
+				Region: result.Region,
+				Err:    result.Err,
+			})
 			continue
 		}
 		for _, r := range result.Resources {
@@ -80,8 +81,8 @@ func (c *Collector) Collect(ctx context.Context, regions []Region) (*Inventory, 
 		}
 	}
 
-	if firstErr != nil {
-		return inv, firstErr
+	if len(regionErrors) > 0 {
+		return inv, CollectErrors{Errors: regionErrors}
 	}
 
 	return inv, nil
