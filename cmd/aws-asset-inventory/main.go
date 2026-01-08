@@ -35,7 +35,7 @@ across specified regions and generates an inventory report.`,
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&profile, "profile", "p", "", "AWS profile name (required)")
+	rootCmd.Flags().StringVarP(&profile, "profile", "p", "", "AWS profile name (uses default credential chain if omitted)")
 	rootCmd.Flags().StringVarP(&regions, "regions", "r", "", "Comma-separated list of AWS regions (required)")
 	rootCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Path for JSON inventory output")
 	rootCmd.Flags().StringVar(&reportFile, "report", "", "Path for markdown report (stdout if omitted)")
@@ -53,9 +53,6 @@ func run(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	if profile == "" {
-		return fmt.Errorf("--profile is required")
-	}
 	if regions == "" {
 		return fmt.Errorf("--regions is required")
 	}
@@ -71,13 +68,20 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "Collecting resources from %d region(s) using profile '%s'...\n", len(regionList), profile)
+	if profile != "" {
+		fmt.Fprintf(os.Stderr, "Collecting resources from %d region(s) using profile '%s'...\n", len(regionList), profile)
+	} else {
+		fmt.Fprintf(os.Stderr, "Collecting resources from %d region(s) using default credentials...\n", len(regionList))
+	}
 
 	clientFactory := func(region awsassetinventory.Region) awsassetinventory.ConfigClient {
-		cfg, err := config.LoadDefaultConfig(ctx,
-			config.WithSharedConfigProfile(profile),
+		opts := []func(*config.LoadOptions) error{
 			config.WithRegion(region.String()),
-		)
+		}
+		if profile != "" {
+			opts = append(opts, config.WithSharedConfigProfile(profile))
+		}
+		cfg, err := config.LoadDefaultConfig(ctx, opts...)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to load config for region %s: %v\n", region, err)
 			return nil

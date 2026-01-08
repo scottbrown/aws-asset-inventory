@@ -52,3 +52,43 @@ func TestPermissionsFlagOutputsList(t *testing.T) {
 		t.Fatalf("unexpected output:\n%q\nwant:\n%q", output, expected)
 	}
 }
+
+func TestRunRequiresRegions(t *testing.T) {
+	prevProfile := profile
+	prevRegions := regions
+	t.Cleanup(func() {
+		profile = prevProfile
+		regions = prevRegions
+	})
+
+	profile = ""
+	regions = ""
+
+	err := run(nil, nil)
+	if err == nil {
+		t.Fatal("expected error for missing regions")
+	}
+	if !strings.Contains(err.Error(), "--regions is required") {
+		t.Fatalf("expected regions required error, got: %v", err)
+	}
+}
+
+func TestRunDoesNotRequireProfile(t *testing.T) {
+	prevProfile := profile
+	prevRegions := regions
+	t.Cleanup(func() {
+		profile = prevProfile
+		regions = prevRegions
+	})
+
+	profile = ""
+	regions = "us-east-1"
+
+	// The run will fail when trying to use AWS credentials (expected),
+	// but it should NOT fail with "--profile is required" error
+	err := run(nil, nil)
+	if err != nil && strings.Contains(err.Error(), "--profile is required") {
+		t.Fatalf("profile should be optional, got: %v", err)
+	}
+	// Any other error (like credential failure) is acceptable for this test
+}

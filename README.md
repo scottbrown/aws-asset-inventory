@@ -60,19 +60,21 @@ go build -o .build/aws-asset-inventory ./cmd/aws-asset-inventory
 ```bash
 # Ensure the caller has AWS Config permissions (see "Required IAM Permissions").
 
-# Example using standard AWS env vars
-export AWS_PROFILE=myprofile
-export AWS_REGION=us-east-1
+# Basic usage - uses default AWS credential chain
 aws-asset-inventory --regions us-east-1,us-west-2
 
-# Basic usage - outputs report to stdout
+# With explicit profile
 aws-asset-inventory --profile myprofile --regions us-east-1,us-west-2
 
+# Using environment variables for credentials
+export AWS_PROFILE=myprofile
+aws-asset-inventory --regions us-east-1,us-west-2
+
 # Save JSON inventory to file
-aws-asset-inventory --profile myprofile --regions us-east-1 --output inventory.json
+aws-asset-inventory --regions us-east-1 --output inventory.json
 
 # Save markdown report to file
-aws-asset-inventory --profile myprofile --regions us-east-1 --report report.md
+aws-asset-inventory --regions us-east-1 --report report.md
 
 # Combined - save both JSON and markdown
 aws-asset-inventory --profile myprofile --regions us-east-1,us-west-2 \
@@ -86,11 +88,16 @@ aws-asset-inventory --permissions
 
 | Flag | Short | Required | Description |
 |------|-------|----------|-------------|
-| `--profile` | `-p` | Yes | AWS profile name |
+| `--profile` | `-p` | No | AWS profile name (uses default credential chain if omitted) |
 | `--regions` | `-r` | Yes | Comma-separated list of AWS regions |
 | `--output` | `-o` | No | Path for JSON inventory output |
 | `--report` | | No | Path for markdown report (stdout if omitted) |
 | `--permissions` | | No | Print required AWS Config permissions and exit |
+
+When `--profile` is omitted, the tool uses the [default AWS credential chain](https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/configuring-sdk.html), which checks (in order):
+1. Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+2. Shared credentials file (`~/.aws/credentials`)
+3. IAM role (for EC2/ECS/Lambda)
 
 ## Development
 
