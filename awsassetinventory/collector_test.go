@@ -1,0 +1,298 @@
+package awsassetinventory
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/configservice"
+	"github.com/aws/aws-sdk-go-v2/service/configservice/types"
+)
+
+type mockConfigClient struct {
+	listDiscoveredResourcesFunc     func(ctx context.Context, params *configservice.ListDiscoveredResourcesInput, optFns ...func(*configservice.Options)) (*configservice.ListDiscoveredResourcesOutput, error)
+	batchGetResourceConfigFunc      func(ctx context.Context, params *configservice.BatchGetResourceConfigInput, optFns ...func(*configservice.Options)) (*configservice.BatchGetResourceConfigOutput, error)
+	getDiscoveredResourceCountsFunc func(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error)
+}
+
+func (m *mockConfigClient) ListDiscoveredResources(ctx context.Context, params *configservice.ListDiscoveredResourcesInput, optFns ...func(*configservice.Options)) (*configservice.ListDiscoveredResourcesOutput, error) {
+	if m.listDiscoveredResourcesFunc != nil {
+		return m.listDiscoveredResourcesFunc(ctx, params, optFns...)
+	}
+	return &configservice.ListDiscoveredResourcesOutput{}, nil
+}
+
+func (m *mockConfigClient) BatchGetResourceConfig(ctx context.Context, params *configservice.BatchGetResourceConfigInput, optFns ...func(*configservice.Options)) (*configservice.BatchGetResourceConfigOutput, error) {
+	if m.batchGetResourceConfigFunc != nil {
+		return m.batchGetResourceConfigFunc(ctx, params, optFns...)
+	}
+	return &configservice.BatchGetResourceConfigOutput{}, nil
+}
+
+func (m *mockConfigClient) GetDiscoveredResourceCounts(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error) {
+	if m.getDiscoveredResourceCountsFunc != nil {
+		return m.getDiscoveredResourceCountsFunc(ctx, params, optFns...)
+	}
+	return &configservice.GetDiscoveredResourceCountsOutput{}, nil
+}
+
+func TestNewCollector(t *testing.T) {
+	factory := func(r Region) ConfigClient {
+		return &mockConfigClient{}
+	}
+	c := NewCollector("test-profile", factory)
+
+	if c.profile != "test-profile" {
+		t.Errorf("NewCollector().profile = %v, want %v", c.profile, "test-profile")
+	}
+	if c.clientFactory == nil {
+		t.Error("NewCollector().clientFactory should not be nil")
+	}
+}
+
+func TestCollector_Collect_EmptyRegions(t *testing.T) {
+	factory := func(r Region) ConfigClient {
+		return &mockConfigClient{}
+	}
+	c := NewCollector("test", factory)
+
+	inv, err := c.Collect(context.Background(), []Region{})
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	if len(inv.Resources) != 0 {
+		t.Errorf("Collect() resources = %v, want empty", len(inv.Resources))
+	}
+}
+
+func TestCollector_Collect_SingleRegion(t *testing.T) {
+	mock := &mockConfigClient{
+		getDiscoveredResourceCountsFunc: func(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error) {
+			return &configservice.GetDiscoveredResourceCountsOutput{
+				ResourceCounts: []types.ResourceCount{
+					{ResourceType: "AWS::EC2::Instance", Count: 2},
+				},
+			}, nil
+		},
+		listDiscoveredResourcesFunc: func(ctx context.Context, params *configservice.ListDiscoveredResourcesInput, optFns ...func(*configservice.Options)) (*configservice.ListDiscoveredResourcesOutput, error) {
+			return &configservice.ListDiscoveredResourcesOutput{
+				ResourceIdentifiers: []types.ResourceIdentifier{
+					{ResourceId: aws.String("i-12345"), ResourceName: aws.String("instance-1")},
+					{ResourceId: aws.String("i-67890"), ResourceName: aws.String("instance-2")},
+				},
+			}, nil
+		},
+		batchGetResourceConfigFunc: func(ctx context.Context, params *configservice.BatchGetResourceConfigInput, optFns ...func(*configservice.Options)) (*configservice.BatchGetResourceConfigOutput, error) {
+			return &configservice.BatchGetResourceConfigOutput{
+				BaseConfigurationItems: []types.BaseConfigurationItem{
+					{
+						ResourceType: "AWS::EC2::Instance",
+						ResourceId:   aws.String("i-12345"),
+						ResourceName: aws.String("instance-1"),
+						AccountId:    aws.String("123456789012"),
+						Arn:          aws.String("arn:aws:ec2:us-east-1:123456789012:instance/i-12345"),
+					},
+					{
+						ResourceType: "AWS::EC2::Instance",
+						ResourceId:   aws.String("i-67890"),
+						ResourceName: aws.String("instance-2"),
+						AccountId:    aws.String("123456789012"),
+						Arn:          aws.String("arn:aws:ec2:us-east-1:123456789012:instance/i-67890"),
+					},
+				},
+			}, nil
+		},
+	}
+
+	factory := func(r Region) ConfigClient { return mock }
+	c := NewCollector("test", factory)
+
+	inv, err := c.Collect(context.Background(), []Region{"us-east-1"})
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	if len(inv.Resources) != 2 {
+		t.Errorf("Collect() resources = %v, want 2", len(inv.Resources))
+	}
+	if inv.Resources[0].AccountID != "123456789012" {
+		t.Errorf("Collect() resource AccountID = %v, want 123456789012", inv.Resources[0].AccountID)
+	}
+}
+
+func TestCollector_Collect_MultipleRegions(t *testing.T) {
+	mock := &mockConfigClient{
+		getDiscoveredResourceCountsFunc: func(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error) {
+			return &configservice.GetDiscoveredResourceCountsOutput{
+				ResourceCounts: []types.ResourceCount{
+					{ResourceType: "AWS::S3::Bucket", Count: 1},
+				},
+			}, nil
+		},
+		listDiscoveredResourcesFunc: func(ctx context.Context, params *configservice.ListDiscoveredResourcesInput, optFns ...func(*configservice.Options)) (*configservice.ListDiscoveredResourcesOutput, error) {
+			return &configservice.ListDiscoveredResourcesOutput{
+				ResourceIdentifiers: []types.ResourceIdentifier{
+					{ResourceId: aws.String("bucket-1"), ResourceName: aws.String("my-bucket")},
+				},
+			}, nil
+		},
+		batchGetResourceConfigFunc: func(ctx context.Context, params *configservice.BatchGetResourceConfigInput, optFns ...func(*configservice.Options)) (*configservice.BatchGetResourceConfigOutput, error) {
+			return &configservice.BatchGetResourceConfigOutput{
+				BaseConfigurationItems: []types.BaseConfigurationItem{
+					{
+						ResourceType: "AWS::S3::Bucket",
+						ResourceId:   aws.String("bucket-1"),
+						ResourceName: aws.String("my-bucket"),
+						AccountId:    aws.String("123456789012"),
+					},
+				},
+			}, nil
+		},
+	}
+
+	factory := func(r Region) ConfigClient { return mock }
+	c := NewCollector("test", factory)
+
+	regions := []Region{"us-east-1", "us-west-2"}
+	inv, err := c.Collect(context.Background(), regions)
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	if len(inv.Regions) != 2 {
+		t.Errorf("Collect() regions = %v, want 2", len(inv.Regions))
+	}
+	if len(inv.Resources) != 2 {
+		t.Errorf("Collect() resources = %v, want 2 (one per region)", len(inv.Resources))
+	}
+}
+
+func TestCollector_Collect_ErrorHandling(t *testing.T) {
+	expectedErr := errors.New("API error")
+	mock := &mockConfigClient{
+		getDiscoveredResourceCountsFunc: func(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error) {
+			return nil, expectedErr
+		},
+	}
+
+	factory := func(r Region) ConfigClient { return mock }
+	c := NewCollector("test", factory)
+
+	inv, err := c.Collect(context.Background(), []Region{"us-east-1"})
+	if err == nil {
+		t.Fatal("Collect() expected error, got nil")
+	}
+	if inv == nil {
+		t.Fatal("Collect() should return partial inventory even on error")
+	}
+}
+
+func TestCollector_Collect_Pagination(t *testing.T) {
+	callCount := 0
+	mock := &mockConfigClient{
+		getDiscoveredResourceCountsFunc: func(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error) {
+			callCount++
+			if callCount == 1 {
+				return &configservice.GetDiscoveredResourceCountsOutput{
+					ResourceCounts: []types.ResourceCount{
+						{ResourceType: "AWS::EC2::Instance", Count: 1},
+					},
+					NextToken: aws.String("token1"),
+				}, nil
+			}
+			return &configservice.GetDiscoveredResourceCountsOutput{
+				ResourceCounts: []types.ResourceCount{
+					{ResourceType: "AWS::S3::Bucket", Count: 1},
+				},
+			}, nil
+		},
+		listDiscoveredResourcesFunc: func(ctx context.Context, params *configservice.ListDiscoveredResourcesInput, optFns ...func(*configservice.Options)) (*configservice.ListDiscoveredResourcesOutput, error) {
+			return &configservice.ListDiscoveredResourcesOutput{
+				ResourceIdentifiers: []types.ResourceIdentifier{
+					{ResourceId: aws.String("resource-1")},
+				},
+			}, nil
+		},
+		batchGetResourceConfigFunc: func(ctx context.Context, params *configservice.BatchGetResourceConfigInput, optFns ...func(*configservice.Options)) (*configservice.BatchGetResourceConfigOutput, error) {
+			return &configservice.BatchGetResourceConfigOutput{
+				BaseConfigurationItems: []types.BaseConfigurationItem{
+					{
+						ResourceType: params.ResourceKeys[0].ResourceType,
+						ResourceId:   aws.String("resource-1"),
+						AccountId:    aws.String("123456789012"),
+					},
+				},
+			}, nil
+		},
+	}
+
+	factory := func(r Region) ConfigClient { return mock }
+	c := NewCollector("test", factory)
+
+	inv, err := c.Collect(context.Background(), []Region{"us-east-1"})
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	if callCount != 2 {
+		t.Errorf("GetDiscoveredResourceCounts called %v times, want 2", callCount)
+	}
+	if len(inv.Resources) != 2 {
+		t.Errorf("Collect() resources = %v, want 2", len(inv.Resources))
+	}
+}
+
+func TestCollector_Collect_BatchGetFallback(t *testing.T) {
+	mock := &mockConfigClient{
+		getDiscoveredResourceCountsFunc: func(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error) {
+			return &configservice.GetDiscoveredResourceCountsOutput{
+				ResourceCounts: []types.ResourceCount{
+					{ResourceType: "AWS::EC2::Instance", Count: 1},
+				},
+			}, nil
+		},
+		listDiscoveredResourcesFunc: func(ctx context.Context, params *configservice.ListDiscoveredResourcesInput, optFns ...func(*configservice.Options)) (*configservice.ListDiscoveredResourcesOutput, error) {
+			return &configservice.ListDiscoveredResourcesOutput{
+				ResourceIdentifiers: []types.ResourceIdentifier{
+					{ResourceId: aws.String("i-12345"), ResourceName: aws.String("instance-1")},
+				},
+			}, nil
+		},
+		batchGetResourceConfigFunc: func(ctx context.Context, params *configservice.BatchGetResourceConfigInput, optFns ...func(*configservice.Options)) (*configservice.BatchGetResourceConfigOutput, error) {
+			return nil, errors.New("batch get failed")
+		},
+	}
+
+	factory := func(r Region) ConfigClient { return mock }
+	c := NewCollector("test", factory)
+
+	inv, err := c.Collect(context.Background(), []Region{"us-east-1"})
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	if len(inv.Resources) != 1 {
+		t.Errorf("Collect() resources = %v, want 1 (fallback)", len(inv.Resources))
+	}
+	if inv.Resources[0].ResourceName != "instance-1" {
+		t.Errorf("Collect() fallback resource name = %v, want instance-1", inv.Resources[0].ResourceName)
+	}
+}
+
+func TestCollector_Collect_NoResources(t *testing.T) {
+	mock := &mockConfigClient{
+		getDiscoveredResourceCountsFunc: func(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error) {
+			return &configservice.GetDiscoveredResourceCountsOutput{
+				ResourceCounts: []types.ResourceCount{},
+			}, nil
+		},
+	}
+
+	factory := func(r Region) ConfigClient { return mock }
+	c := NewCollector("test", factory)
+
+	inv, err := c.Collect(context.Background(), []Region{"us-east-1"})
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	if len(inv.Resources) != 0 {
+		t.Errorf("Collect() resources = %v, want 0", len(inv.Resources))
+	}
+}

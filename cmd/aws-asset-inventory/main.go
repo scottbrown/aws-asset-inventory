@@ -1,0 +1,135 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/configservice"
+	"github.com/scottbrown/aws-asset-inventory/awsassetinventory"
+	"github.com/spf13/cobra"
+)
+
+var (
+	profile    string
+	regions    string
+	outputFile string
+	reportFile string
+)
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+var rootCmd = &cobra.Command{
+	Use:   "aws-asset-inventory",
+	Short: "Collect AWS Config resources across regions",
+	Long: `A CLI tool that collects all resources AWS Config knows about
+across specified regions and generates an inventory report.`,
+	RunE: run,
+}
+
+func init() {
+	rootCmd.Flags().StringVarP(&profile, "profile", "p", "", "AWS profile name (required)")
+	rootCmd.Flags().StringVarP(&regions, "regions", "r", "", "Comma-separated list of AWS regions (required)")
+	rootCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Path for JSON inventory output")
+	rootCmd.Flags().StringVar(&reportFile, "report", "", "Path for markdown report (stdout if omitted)")
+
+	rootCmd.MarkFlagRequired("profile")
+	rootCmd.MarkFlagRequired("regions")
+}
+
+func run(cmd *cobra.Command, args []string) error {
+	ctx := context.Background()
+
+	regionList := parseRegions(regions)
+	if len(regionList) == 0 {
+		return fmt.Errorf("at least one region must be specified")
+	}
+
+	for _, r := range regionList {
+		if !r.IsValid() {
+			return fmt.Errorf("invalid region: %s", r)
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "Collecting resources from %d region(s) using profile '%s'...\n", len(regionList), profile)
+
+	clientFactory := func(region awsassetinventory.Region) awsassetinventory.ConfigClient {
+		cfg, err := config.LoadDefaultConfig(ctx,
+			config.WithSharedConfigProfile(profile),
+			config.WithRegion(region.String()),
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to load config for region %s: %v\n", region, err)
+			return nil
+		}
+		return configservice.NewFromConfig(cfg)
+	}
+
+	collector := awsassetinventory.NewCollector(profile, clientFactory)
+	inventory, err := collector.Collect(ctx, regionList)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: collection completed with errors: %v\n", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Collected %d resources\n", inventory.ResourceCount())
+
+	if outputFile != "" {
+		if err := writeJSONOutput(inventory, outputFile); err != nil {
+			return fmt.Errorf("failed to write JSON output: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "JSON inventory written to: %s\n", outputFile)
+	}
+
+	if err := writeReport(inventory, reportFile); err != nil {
+		return fmt.Errorf("failed to write report: %w", err)
+	}
+
+	return nil
+}
+
+func parseRegions(input string) []awsassetinventory.Region {
+	parts := strings.Split(input, ",")
+	regions := make([]awsassetinventory.Region, 0, len(parts))
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			regions = append(regions, awsassetinventory.Region(trimmed))
+		}
+	}
+	return regions
+}
+
+func writeJSONOutput(inv *awsassetinventory.Inventory, path string) error {
+	data, err := inv.ToJSON()
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+func writeReport(inv *awsassetinventory.Inventory, path string) error {
+	rg := awsassetinventory.NewReportGenerator(inv)
+
+	if path == "" {
+		return rg.Generate(os.Stdout)
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if err := rg.Generate(f); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(os.Stderr, "Report written to: %s\n", path)
+	return nil
+}

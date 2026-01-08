@@ -1,0 +1,74 @@
+version: '3'
+
+vars:
+  BINARY_NAME: aws-asset-inventory
+  BUILD_DIR: ./.build
+  TEST_DIR: ./.test
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  build:
+    desc: Build the binary
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}
+      - go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} ./cmd/{{.BINARY_NAME}}
+    sources:
+      - ./**/*.go
+    generates:
+      - "{{.BUILD_DIR}}/{{.BINARY_NAME}}"
+
+  test:
+    desc: Run tests with coverage
+    cmds:
+      - mkdir -p {{.TEST_DIR}}
+      - go test -v -race -coverprofile={{.TEST_DIR}}/coverage.out ./...
+      - go tool cover -func={{.TEST_DIR}}/coverage.out
+
+  test:short:
+    desc: Run tests without coverage
+    cmds:
+      - go test -v ./...
+
+  cover:
+    desc: Open coverage report in browser
+    deps: [test]
+    cmds:
+      - go tool cover -html={{.TEST_DIR}}/coverage.out
+
+  lint:
+    desc: Run linter
+    cmds:
+      - golangci-lint run ./...
+
+  fmt:
+    desc: Format code
+    cmds:
+      - go fmt ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  tidy:
+    desc: Tidy go modules
+    cmds:
+      - go mod tidy
+
+  clean:
+    desc: Remove build and test artifacts
+    cmds:
+      - rm -rf {{.BUILD_DIR}}
+      - rm -rf {{.TEST_DIR}}
+
+  all:
+    desc: Run fmt, vet, lint, test, and build
+    cmds:
+      - task: fmt
+      - task: vet
+      - task: test
+      - task: build

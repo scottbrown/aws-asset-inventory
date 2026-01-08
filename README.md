@@ -1,2 +1,129 @@
-# aws-asset-inventory
-CLI program that can make an asset inventory from an AWS account
+# AWS Asset Inventory
+
+A CLI tool that collects AWS resources from AWS Config across specified regions and generates inventory reports.
+
+## Features
+
+- Collects all resources tracked by AWS Config
+- Supports multiple AWS regions
+- Outputs raw inventory as JSON
+- Generates markdown summary reports with:
+  - Resource counts by type
+  - Resource counts by region
+  - Detailed resource listings
+
+## Prerequisites
+
+- Go 1.23 or later
+- [Task](https://taskfile.dev/) (optional, for build automation)
+- AWS credentials configured with access to AWS Config
+- AWS Config must be enabled in the target regions
+
+## Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/scottbrown/aws-asset-inventory.git
+cd aws-asset-inventory
+
+# Build the binary
+task build
+# or without Task:
+go build -o .build/aws-asset-inventory ./cmd/aws-asset-inventory
+```
+
+## Usage
+
+```bash
+# Basic usage - outputs report to stdout
+aws-asset-inventory --profile myprofile --regions us-east-1,us-west-2
+
+# Save JSON inventory to file
+aws-asset-inventory --profile myprofile --regions us-east-1 --output inventory.json
+
+# Save markdown report to file
+aws-asset-inventory --profile myprofile --regions us-east-1 --report report.md
+
+# Combined - save both JSON and markdown
+aws-asset-inventory --profile myprofile --regions us-east-1,us-west-2 \
+  --output inventory.json --report report.md
+```
+
+### Flags
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--profile` | `-p` | Yes | AWS profile name |
+| `--regions` | `-r` | Yes | Comma-separated list of AWS regions |
+| `--output` | `-o` | No | Path for JSON inventory output |
+| `--report` | | No | Path for markdown report (stdout if omitted) |
+
+## Development
+
+### Running Tests
+
+```bash
+# Run tests with coverage
+task test
+
+# Run tests without coverage
+task test:short
+
+# View coverage report in browser
+task cover
+```
+
+### Available Tasks
+
+```bash
+task --list
+```
+
+- `build` - Build the binary
+- `test` - Run tests with coverage
+- `test:short` - Run tests without coverage
+- `cover` - Open coverage report in browser
+- `lint` - Run linter
+- `fmt` - Format code
+- `vet` - Run go vet
+- `tidy` - Tidy go modules
+- `clean` - Remove build and test artifacts
+- `all` - Run fmt, vet, lint, test, and build
+
+## Output Formats
+
+### JSON Inventory
+
+The JSON output contains the raw inventory data in a structure compatible with AWS Config:
+
+```json
+{
+  "collectedAt": "2026-01-07T15:30:00Z",
+  "profile": "myprofile",
+  "regions": ["us-east-1", "us-west-2"],
+  "resources": [
+    {
+      "resourceType": "AWS::EC2::Instance",
+      "resourceId": "i-12345",
+      "resourceName": "my-instance",
+      "awsRegion": "us-east-1",
+      "accountId": "123456789012",
+      "arn": "arn:aws:ec2:us-east-1:123456789012:instance/i-12345",
+      "configuration": { ... }
+    }
+  ]
+}
+```
+
+### Markdown Report
+
+The markdown report includes:
+
+1. **Header** - Collection timestamp, profile, and regions
+2. **Summary** - Total resource counts by type
+3. **By Region** - Resource counts broken down by region
+4. **Resource Details** - Detailed listing of all resources
+
+## Licence
+
+MIT
