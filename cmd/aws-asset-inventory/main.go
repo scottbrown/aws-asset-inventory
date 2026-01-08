@@ -13,11 +13,12 @@ import (
 )
 
 var (
-	profile        string
-	regions        string
-	outputFile     string
-	reportFile     string
+	profile         string
+	regions         string
+	outputFile      string
+	reportFile      string
 	permissionsOnly bool
+	noReport        bool
 )
 
 func main() {
@@ -37,10 +38,10 @@ across specified regions and generates an inventory report.`,
 func init() {
 	rootCmd.Flags().StringVarP(&profile, "profile", "p", "", "AWS profile name (uses default credential chain if omitted)")
 	rootCmd.Flags().StringVarP(&regions, "regions", "r", "", "Comma-separated list of AWS regions (required)")
-	rootCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Path for JSON inventory output")
-	rootCmd.Flags().StringVar(&reportFile, "report", "", "Path for markdown report (stdout if omitted)")
+	rootCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Path for JSON inventory output (use '-' for stdout)")
+	rootCmd.Flags().StringVar(&reportFile, "report", "", "Path for markdown report (use '-' for stdout)")
+	rootCmd.Flags().BoolVar(&noReport, "no-report", false, "Skip markdown report generation")
 	rootCmd.Flags().BoolVar(&permissionsOnly, "permissions", false, "Print required AWS Config permissions and exit")
-
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -66,6 +67,10 @@ func run(cmd *cobra.Command, args []string) error {
 		if !r.IsValid() {
 			return fmt.Errorf("invalid region: %s", r)
 		}
+	}
+
+	if outputFile == "-" && !noReport && (reportFile == "" || reportFile == "-") {
+		return fmt.Errorf("cannot write both JSON and report to stdout; use --no-report or specify --report <file>")
 	}
 
 	if profile != "" {
@@ -98,14 +103,24 @@ func run(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "Collected %d resources\n", inventory.ResourceCount())
 
 	if outputFile != "" {
-		if err := writeJSONOutput(inventory, outputFile); err != nil {
-			return fmt.Errorf("failed to write JSON output: %w", err)
+		if outputFile == "-" {
+			data, err := inventory.ToJSON()
+			if err != nil {
+				return fmt.Errorf("failed to serialize JSON: %w", err)
+			}
+			fmt.Fprintln(os.Stdout, string(data))
+		} else {
+			if err := writeJSONOutput(inventory, outputFile); err != nil {
+				return fmt.Errorf("failed to write JSON output: %w", err)
+			}
+			fmt.Fprintf(os.Stderr, "JSON inventory written to: %s\n", outputFile)
 		}
-		fmt.Fprintf(os.Stderr, "JSON inventory written to: %s\n", outputFile)
 	}
 
-	if err := writeReport(inventory, reportFile); err != nil {
-		return fmt.Errorf("failed to write report: %w", err)
+	if !noReport {
+		if err := writeReport(inventory, reportFile); err != nil {
+			return fmt.Errorf("failed to write report: %w", err)
+		}
 	}
 
 	return nil
@@ -142,7 +157,7 @@ func writeJSONOutput(inv *awsassetinventory.Inventory, path string) error {
 func writeReport(inv *awsassetinventory.Inventory, path string) error {
 	rg := awsassetinventory.NewReportGenerator(inv)
 
-	if path == "" {
+	if path == "" || path == "-" {
 		return rg.Generate(os.Stdout)
 	}
 

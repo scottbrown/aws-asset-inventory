@@ -80,6 +80,12 @@ aws-asset-inventory --regions us-east-1 --report report.md
 aws-asset-inventory --profile myprofile --regions us-east-1,us-west-2 \
   --output inventory.json --report report.md
 
+# JSON to stdout (no report)
+aws-asset-inventory --regions us-east-1 --output - --no-report
+
+# JSON to stdout, report to file
+aws-asset-inventory --regions us-east-1 --output - --report report.md
+
 # Print required AWS Config permissions (one per line)
 aws-asset-inventory --permissions
 ```
@@ -90,8 +96,9 @@ aws-asset-inventory --permissions
 |------|-------|----------|-------------|
 | `--profile` | `-p` | No | AWS profile name (uses default credential chain if omitted) |
 | `--regions` | `-r` | Yes | Comma-separated list of AWS regions |
-| `--output` | `-o` | No | Path for JSON inventory output |
-| `--report` | | No | Path for markdown report (stdout if omitted) |
+| `--output` | `-o` | No | Path for JSON inventory output (use `-` for stdout) |
+| `--report` | | No | Path for markdown report (use `-` for stdout) |
+| `--no-report` | | No | Skip markdown report generation |
 | `--permissions` | | No | Print required AWS Config permissions and exit |
 
 When `--profile` is omitted, the tool uses the [default AWS credential chain](https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/configuring-sdk.html), which checks (in order):
