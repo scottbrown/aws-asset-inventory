@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/configservice"
@@ -488,5 +490,88 @@ func TestCollector_Collect_WithLogger(t *testing.T) {
 	}
 	if !hasCompleted {
 		t.Error("Logger should have logged 'Completed with'")
+	}
+}
+
+func TestCollector_Collect_Concurrency(t *testing.T) {
+	var activeCount int32
+	var maxActive int32
+	var mu sync.Mutex
+
+	mock := &mockConfigClient{
+		getDiscoveredResourceCountsFunc: func(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error) {
+			mu.Lock()
+			activeCount++
+			if activeCount > maxActive {
+				maxActive = activeCount
+			}
+			mu.Unlock()
+
+			time.Sleep(50 * time.Millisecond)
+
+			mu.Lock()
+			activeCount--
+			mu.Unlock()
+
+			return &configservice.GetDiscoveredResourceCountsOutput{
+				ResourceCounts: []types.ResourceCount{},
+			}, nil
+		},
+	}
+
+	factory := func(r Region) ConfigClient { return mock }
+	c := NewCollector("test", factory)
+	c.MaxConcurrency = 2
+
+	regions := []Region{"us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"}
+	_, err := c.Collect(context.Background(), regions)
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+
+	if maxActive > 2 {
+		t.Errorf("MaxConcurrency not respected: max active = %d, want <= 2", maxActive)
+	}
+}
+
+func TestCollector_Collect_RetryOnThrottle(t *testing.T) {
+	callCount := 0
+	mock := &mockConfigClient{
+		getDiscoveredResourceCountsFunc: func(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error) {
+			callCount++
+			if callCount < 3 {
+				return nil, errors.New("ThrottlingException: Rate exceeded")
+			}
+			return &configservice.GetDiscoveredResourceCountsOutput{
+				ResourceCounts: []types.ResourceCount{},
+			}, nil
+		},
+	}
+
+	factory := func(r Region) ConfigClient { return mock }
+	c := NewCollector("test", factory)
+	c.MaxRetries = 3
+
+	_, err := c.Collect(context.Background(), []Region{"us-east-1"})
+	if err != nil {
+		t.Fatalf("Collect() error = %v, want nil (should retry)", err)
+	}
+
+	if callCount != 3 {
+		t.Errorf("Expected 3 calls (2 retries), got %d", callCount)
+	}
+}
+
+func TestCollector_MaxConcurrencyDefault(t *testing.T) {
+	c := NewCollector("test", nil)
+	if c.maxConcurrency() != DefaultMaxConcurrency {
+		t.Errorf("maxConcurrency() = %d, want %d", c.maxConcurrency(), DefaultMaxConcurrency)
+	}
+}
+
+func TestCollector_MaxRetriesDefault(t *testing.T) {
+	c := NewCollector("test", nil)
+	if c.maxRetries() != DefaultMaxRetries {
+		t.Errorf("maxRetries() = %d, want %d", c.maxRetries(), DefaultMaxRetries)
 	}
 }

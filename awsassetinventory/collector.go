@@ -26,9 +26,25 @@ type Logger func(format string, args ...any)
 
 // Collector gathers AWS resources from AWS Config across regions.
 type Collector struct {
-	profile       string
-	clientFactory ConfigClientFactory
-	Logger        Logger
+	profile        string
+	clientFactory  ConfigClientFactory
+	Logger         Logger
+	MaxConcurrency int // 0 means use default (5)
+	MaxRetries     int // 0 means use default (3)
+}
+
+func (c *Collector) maxConcurrency() int {
+	if c.MaxConcurrency > 0 {
+		return c.MaxConcurrency
+	}
+	return DefaultMaxConcurrency
+}
+
+func (c *Collector) maxRetries() int {
+	if c.MaxRetries > 0 {
+		return c.MaxRetries
+	}
+	return DefaultMaxRetries
 }
 
 // NewCollector creates a new Collector with the given AWS config and profile name.
@@ -51,12 +67,15 @@ func (c *Collector) Collect(ctx context.Context, regions []Region) (*Inventory, 
 	inv := NewInventory(c.profile, regions)
 
 	resultCh := make(chan CollectResult, len(regions))
+	sem := make(chan struct{}, c.maxConcurrency())
 	var wg sync.WaitGroup
 
 	for _, region := range regions {
 		wg.Add(1)
 		go func(r Region) {
 			defer wg.Done()
+			sem <- struct{}{}        // acquire semaphore
+			defer func() { <-sem }() // release semaphore
 			resources, err := c.collectRegion(ctx, r)
 			resultCh <- CollectResult{Region: r, Resources: resources, Err: err}
 		}(region)
@@ -135,7 +154,9 @@ func (c *Collector) discoverResourceTypes(ctx context.Context, client ConfigClie
 			NextToken: nextToken,
 		}
 
-		output, err := client.GetDiscoveredResourceCounts(ctx, input)
+		output, err := retry(ctx, c.maxRetries(), func() (*configservice.GetDiscoveredResourceCountsOutput, error) {
+			return client.GetDiscoveredResourceCounts(ctx, input)
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -165,7 +186,9 @@ func (c *Collector) collectResourceType(ctx context.Context, client ConfigClient
 			NextToken:    nextToken,
 		}
 
-		output, err := client.ListDiscoveredResources(ctx, input)
+		output, err := retry(ctx, c.maxRetries(), func() (*configservice.ListDiscoveredResourcesOutput, error) {
+			return client.ListDiscoveredResources(ctx, input)
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -218,7 +241,9 @@ func (c *Collector) batchGetResources(ctx context.Context, client ConfigClient, 
 			ResourceKeys: batch,
 		}
 
-		output, err := client.BatchGetResourceConfig(ctx, input)
+		output, err := retry(ctx, c.maxRetries(), func() (*configservice.BatchGetResourceConfigOutput, error) {
+			return client.BatchGetResourceConfig(ctx, input)
+		})
 		if err != nil {
 			return nil, err
 		}

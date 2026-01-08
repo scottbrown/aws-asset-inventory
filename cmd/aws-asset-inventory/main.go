@@ -14,14 +14,15 @@ import (
 )
 
 var (
-	profile        string
-	regions        string
-	outputFile     string
-	reportFile     string
+	profile         string
+	regions         string
+	outputFile      string
+	reportFile      string
 	permissionsOnly bool
-	noReport       bool
-	includeDetails bool
-	verbose        bool
+	noReport        bool
+	includeDetails  bool
+	verbose         bool
+	concurrency     int
 )
 
 func main() {
@@ -46,6 +47,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&noReport, "no-report", false, "Skip markdown report generation")
 	rootCmd.Flags().BoolVar(&includeDetails, "include-details", false, "Include resource details in report")
 	rootCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show detailed progress during collection")
+	rootCmd.Flags().IntVar(&concurrency, "concurrency", 0, "Max concurrent region collections (default 5)")
 	rootCmd.Flags().BoolVar(&permissionsOnly, "permissions", false, "Print required AWS Config permissions and exit")
 }
 
@@ -100,6 +102,9 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	collector := awsassetinventory.NewCollector(profile, clientFactory)
+	if concurrency > 0 {
+		collector.MaxConcurrency = concurrency
+	}
 	if verbose {
 		collector.Logger = func(format string, args ...any) {
 			fmt.Fprintf(os.Stderr, format+"\n", args...)

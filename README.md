@@ -107,6 +107,7 @@ aws-asset-inventory --permissions
 | `--no-report` | | No | Skip markdown report generation |
 | `--include-details` | | No | Include resource details in report |
 | `--verbose` | `-v` | No | Show detailed progress during collection |
+| `--concurrency` | | No | Max concurrent region collections (default 5) |
 | `--permissions` | | No | Print required AWS Config permissions and exit |
 
 When `--profile` is omitted, the tool uses the [default AWS credential chain](https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/configuring-sdk.html), which checks (in order):
