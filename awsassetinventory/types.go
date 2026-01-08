@@ -2,8 +2,11 @@ package awsassetinventory
 
 import (
 	"encoding/json"
+	"regexp"
 	"time"
 )
+
+var regionPattern = regexp.MustCompile(`^[a-z]{2}-[a-z]+-\d+$`)
 
 // Region represents an AWS region identifier.
 type Region string
@@ -15,10 +18,7 @@ func (r Region) String() string {
 
 // IsValid checks if the region follows the AWS region naming pattern.
 func (r Region) IsValid() bool {
-	if len(r) < 9 || len(r) > 16 {
-		return false
-	}
-	return true
+	return regionPattern.MatchString(string(r))
 }
 
 // ResourceType represents an AWS Config resource type (e.g., AWS::EC2::Instance).

@@ -18,11 +18,27 @@ func TestRegion_IsValid(t *testing.T) {
 		region Region
 		want   bool
 	}{
+		// Valid regions
 		{"valid us-east-1", Region("us-east-1"), true},
+		{"valid us-west-2", Region("us-west-2"), true},
 		{"valid eu-west-1", Region("eu-west-1"), true},
+		{"valid eu-central-1", Region("eu-central-1"), true},
 		{"valid ap-southeast-2", Region("ap-southeast-2"), true},
-		{"too short", Region("us"), false},
+		{"valid ap-northeast-1", Region("ap-northeast-1"), true},
+		{"valid sa-east-1", Region("sa-east-1"), true},
+		{"valid ca-central-1", Region("ca-central-1"), true},
+		{"valid me-south-1", Region("me-south-1"), true},
+		{"valid af-south-1", Region("af-south-1"), true},
+
+		// Invalid regions
 		{"empty", Region(""), false},
+		{"too short", Region("us"), false},
+		{"no hyphens", Region("useast1"), false},
+		{"uppercase", Region("US-EAST-1"), false},
+		{"missing number", Region("us-east"), false},
+		{"wrong format", Region("xxxxxxxxx"), false},
+		{"special chars", Region("us-east-1!"), false},
+		{"spaces", Region("us east 1"), false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
