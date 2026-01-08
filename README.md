@@ -17,7 +17,30 @@ A CLI tool that collects AWS resources from AWS Config across specified regions 
 - Go 1.23 or later
 - [Task](https://taskfile.dev/) (optional, for build automation)
 - AWS credentials configured with access to AWS Config
-- AWS Config must be enabled in the target regions
+- AWS Config must be enabled in each target region you query
+
+### Required IAM Permissions
+
+At minimum, the caller needs the following AWS Config permissions:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "config:GetDiscoveredResourceCounts",
+        "config:ListDiscoveredResources",
+        "config:BatchGetResourceConfig"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+Note: If you collect across multiple regions, these permissions must apply in each target region.
 
 ## Installation
 
@@ -35,6 +58,13 @@ go build -o .build/aws-asset-inventory ./cmd/aws-asset-inventory
 ## Usage
 
 ```bash
+# Ensure the caller has AWS Config permissions (see "Required IAM Permissions").
+
+# Example using standard AWS env vars
+export AWS_PROFILE=myprofile
+export AWS_REGION=us-east-1
+aws-asset-inventory --regions us-east-1,us-west-2
+
 # Basic usage - outputs report to stdout
 aws-asset-inventory --profile myprofile --regions us-east-1,us-west-2
 
@@ -47,6 +77,9 @@ aws-asset-inventory --profile myprofile --regions us-east-1 --report report.md
 # Combined - save both JSON and markdown
 aws-asset-inventory --profile myprofile --regions us-east-1,us-west-2 \
   --output inventory.json --report report.md
+
+# Print required AWS Config permissions (one per line)
+aws-asset-inventory --permissions
 ```
 
 ### Flags
@@ -57,6 +90,7 @@ aws-asset-inventory --profile myprofile --regions us-east-1,us-west-2 \
 | `--regions` | `-r` | Yes | Comma-separated list of AWS regions |
 | `--output` | `-o` | No | Path for JSON inventory output |
 | `--report` | | No | Path for markdown report (stdout if omitted) |
+| `--permissions` | | No | Print required AWS Config permissions and exit |
 
 ## Development
 

@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	profile    string
-	regions    string
-	outputFile string
-	reportFile string
+	profile        string
+	regions        string
+	outputFile     string
+	reportFile     string
+	permissionsOnly bool
 )
 
 func main() {
@@ -38,13 +39,26 @@ func init() {
 	rootCmd.Flags().StringVarP(&regions, "regions", "r", "", "Comma-separated list of AWS regions (required)")
 	rootCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Path for JSON inventory output")
 	rootCmd.Flags().StringVar(&reportFile, "report", "", "Path for markdown report (stdout if omitted)")
+	rootCmd.Flags().BoolVar(&permissionsOnly, "permissions", false, "Print required AWS Config permissions and exit")
 
-	rootCmd.MarkFlagRequired("profile")
-	rootCmd.MarkFlagRequired("regions")
 }
 
 func run(cmd *cobra.Command, args []string) error {
+	if permissionsOnly {
+		for _, perm := range requiredPermissions() {
+			fmt.Fprintln(os.Stdout, perm)
+		}
+		return nil
+	}
+
 	ctx := context.Background()
+
+	if profile == "" {
+		return fmt.Errorf("--profile is required")
+	}
+	if regions == "" {
+		return fmt.Errorf("--regions is required")
+	}
 
 	regionList := parseRegions(regions)
 	if len(regionList) == 0 {
@@ -91,6 +105,14 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func requiredPermissions() []string {
+	return []string{
+		"config:GetDiscoveredResourceCounts",
+		"config:ListDiscoveredResources",
+		"config:BatchGetResourceConfig",
+	}
 }
 
 func parseRegions(input string) []awsassetinventory.Region {
