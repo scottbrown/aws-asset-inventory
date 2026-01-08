@@ -4,6 +4,11 @@ vars:
   BINARY_NAME: aws-asset-inventory
   BUILD_DIR: ./.build
   TEST_DIR: ./.test
+  GIT_BRANCH:
+    sh: git rev-parse --abbrev-ref HEAD
+  GIT_SHA:
+    sh: git rev-parse --short HEAD
+  LDFLAGS: -X main.gitBranch={{.GIT_BRANCH}} -X main.gitSHA={{.GIT_SHA}}
 
 tasks:
   default:
@@ -15,7 +20,7 @@ tasks:
     desc: Build the binary
     cmds:
       - mkdir -p {{.BUILD_DIR}}
-      - go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} ./cmd/{{.BINARY_NAME}}
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} ./cmd/{{.BINARY_NAME}}
     sources:
       - ./**/*.go
     generates:

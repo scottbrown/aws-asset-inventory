@@ -34,6 +34,29 @@ func captureStdout(t *testing.T, fn func()) string {
 	return out
 }
 
+func TestVersionFormat(t *testing.T) {
+	v := version()
+	if !strings.Contains(v, "(") || !strings.Contains(v, ")") {
+		t.Fatalf("version should be in format 'branch (sha)', got: %s", v)
+	}
+
+	// Verify format: "branch (sha)"
+	parts := strings.SplitN(v, " (", 2)
+	if len(parts) != 2 {
+		t.Fatalf("version should have format 'branch (sha)', got: %s", v)
+	}
+
+	branch := parts[0]
+	sha := strings.TrimSuffix(parts[1], ")")
+
+	if branch == "" {
+		t.Fatal("branch should not be empty")
+	}
+	if sha == "" {
+		t.Fatal("sha should not be empty")
+	}
+}
+
 func TestPermissionsFlagOutputsList(t *testing.T) {
 	prevPermissionsOnly := permissionsOnly
 	permissionsOnly = true

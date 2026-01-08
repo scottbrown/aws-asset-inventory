@@ -14,6 +14,10 @@ import (
 )
 
 var (
+	// Version information set via ldflags at build time
+	gitBranch = "unknown"
+	gitSHA    = "unknown"
+
 	profile         string
 	regions         string
 	outputFile      string
@@ -24,6 +28,10 @@ var (
 	verbose         bool
 	concurrency     int
 )
+
+func version() string {
+	return fmt.Sprintf("%s (%s)", gitBranch, gitSHA)
+}
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
@@ -40,6 +48,8 @@ across specified regions and generates an inventory report.`,
 }
 
 func init() {
+	rootCmd.Version = version()
+
 	rootCmd.Flags().StringVarP(&profile, "profile", "p", "", "AWS profile name (uses default credential chain if omitted)")
 	rootCmd.Flags().StringVarP(&regions, "regions", "r", "", "Comma-separated list of AWS regions (required)")
 	rootCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Path for JSON inventory output (use '-' for stdout)")
