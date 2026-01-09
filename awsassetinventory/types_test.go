@@ -229,3 +229,43 @@ func TestResource_JSONMarshalling(t *testing.T) {
 		t.Errorf("parsed.Tags[Name] = %v, want %v", parsed.Tags["Name"], "my-instance")
 	}
 }
+
+func TestLoadFromJSON(t *testing.T) {
+	inv := NewInventory("test-profile", []Region{"us-east-1", "us-west-2"})
+	inv.AddResource(Resource{
+		ResourceType: "AWS::EC2::Instance",
+		ResourceID:   "i-12345",
+		Region:       "us-east-1",
+		AccountID:    "123456789012",
+	})
+
+	data, err := inv.ToJSON()
+	if err != nil {
+		t.Fatalf("ToJSON() error = %v", err)
+	}
+
+	loaded, err := LoadFromJSON(data)
+	if err != nil {
+		t.Fatalf("LoadFromJSON() error = %v", err)
+	}
+
+	if loaded.Profile != "test-profile" {
+		t.Errorf("LoadFromJSON().Profile = %v, want %v", loaded.Profile, "test-profile")
+	}
+	if len(loaded.Regions) != 2 {
+		t.Errorf("LoadFromJSON().Regions length = %v, want %v", len(loaded.Regions), 2)
+	}
+	if len(loaded.Resources) != 1 {
+		t.Errorf("LoadFromJSON().Resources length = %v, want %v", len(loaded.Resources), 1)
+	}
+	if loaded.Resources[0].ResourceID != "i-12345" {
+		t.Errorf("LoadFromJSON().Resources[0].ResourceID = %v, want %v", loaded.Resources[0].ResourceID, "i-12345")
+	}
+}
+
+func TestLoadFromJSON_InvalidJSON(t *testing.T) {
+	_, err := LoadFromJSON([]byte("not valid json"))
+	if err == nil {
+		t.Error("LoadFromJSON() should return error for invalid JSON")
+	}
+}

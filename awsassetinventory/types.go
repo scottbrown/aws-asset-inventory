@@ -113,3 +113,12 @@ func (inv *Inventory) ResourcesByType() map[ResourceType][]Resource {
 func (inv *Inventory) ToJSON() ([]byte, error) {
 	return json.MarshalIndent(inv, "", "  ")
 }
+
+// LoadFromJSON deserializes an inventory from JSON data.
+func LoadFromJSON(data []byte) (*Inventory, error) {
+	var inv Inventory
+	if err := json.Unmarshal(data, &inv); err != nil {
+		return nil, err
+	}
+	return &inv, nil
+}

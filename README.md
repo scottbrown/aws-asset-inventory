@@ -57,58 +57,98 @@ go build -o .build/aws-asset-inventory ./cmd/aws-asset-inventory
 
 ## Usage
 
+The CLI uses subcommands to separate collection from reporting, allowing you to collect once and generate reports multiple times.
+
+### Collect Resources
+
+Collect AWS resources and save to a JSON file:
+
 ```bash
-# Ensure the caller has AWS Config permissions (see "Required IAM Permissions").
+# Basic collection - outputs JSON to stdout
+aws-asset-inventory collect --regions us-east-1,us-west-2
 
-# Basic usage - uses default AWS credential chain
-aws-asset-inventory --regions us-east-1,us-west-2
+# Save to file
+aws-asset-inventory collect --regions us-east-1,us-west-2 --output inventory.json
 
-# With explicit profile
-aws-asset-inventory --profile myprofile --regions us-east-1,us-west-2
-
-# Using environment variables for credentials
-export AWS_PROFILE=myprofile
-aws-asset-inventory --regions us-east-1,us-west-2
-
-# Save JSON inventory to file
-aws-asset-inventory --regions us-east-1 --output inventory.json
-
-# Save markdown report to file
-aws-asset-inventory --regions us-east-1 --report report.md
-
-# Combined - save both JSON and markdown
-aws-asset-inventory --profile myprofile --regions us-east-1,us-west-2 \
-  --output inventory.json --report report.md
-
-# JSON to stdout (no report)
-aws-asset-inventory --regions us-east-1 --output - --no-report
-
-# JSON to stdout, report to file
-aws-asset-inventory --regions us-east-1 --output - --report report.md
-
-# Full report with resource details
-aws-asset-inventory --regions us-east-1 --include-details
+# With explicit AWS profile
+aws-asset-inventory collect --profile myprofile --regions us-east-1 --output inventory.json
 
 # Verbose output for debugging
-aws-asset-inventory --regions us-east-1,us-west-2 --verbose
+aws-asset-inventory collect --regions us-east-1 --output inventory.json --verbose
 
-# Print required AWS Config permissions (one per line)
-aws-asset-inventory --permissions
+# Control concurrency
+aws-asset-inventory collect --regions us-east-1,us-west-2,eu-west-1 --concurrency 3 --output inventory.json
 ```
 
-### Flags
+### Generate Reports
+
+Generate markdown reports from collected inventory:
+
+```bash
+# Basic report to stdout
+aws-asset-inventory report --input inventory.json
+
+# Save report to file
+aws-asset-inventory report --input inventory.json --output report.md
+
+# Include detailed resource listings
+aws-asset-inventory report --input inventory.json --output report.md --include-details
+```
+
+### Other Commands
+
+```bash
+# Print version information
+aws-asset-inventory version
+
+# Print required AWS Config permissions (one per line)
+aws-asset-inventory permissions
+```
+
+### Typical Workflow
+
+```bash
+# Step 1: Collect resources (slow operation, run once)
+aws-asset-inventory collect --profile myprofile --regions us-east-1,us-west-2 --output inventory.json
+
+# Step 2: Generate reports (fast, can run multiple times)
+aws-asset-inventory report --input inventory.json --output summary.md
+aws-asset-inventory report --input inventory.json --output detailed.md --include-details
+```
+
+## Subcommands
+
+### collect
+
+Collect AWS resources from AWS Config.
 
 | Flag | Short | Required | Description |
 |------|-------|----------|-------------|
-| `--profile` | `-p` | No | AWS profile name (uses default credential chain if omitted) |
 | `--regions` | `-r` | Yes | Comma-separated list of AWS regions |
-| `--output` | `-o` | No | Path for JSON inventory output (use `-` for stdout) |
-| `--report` | | No | Path for markdown report (use `-` for stdout) |
-| `--no-report` | | No | Skip markdown report generation |
-| `--include-details` | | No | Include resource details in report |
+| `--profile` | `-p` | No | AWS profile name (uses default credential chain if omitted) |
+| `--output` | `-o` | No | Output file path (default: stdout) |
 | `--verbose` | `-v` | No | Show detailed progress during collection |
 | `--concurrency` | | No | Max concurrent region collections (default 5) |
-| `--permissions` | | No | Print required AWS Config permissions and exit |
+
+### report
+
+Generate a markdown report from inventory JSON.
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--input` | `-i` | Yes | Input JSON inventory file |
+| `--output` | `-o` | No | Output file path (default: stdout) |
+| `--include-details` | | No | Include resource details in report |
+
+### version
+
+Print version information. No flags.
+
+### permissions
+
+Print required AWS IAM permissions. No flags.
+
+## AWS Credential Chain
 
 When `--profile` is omitted, the tool uses the [default AWS credential chain](https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/configuring-sdk.html), which checks (in order):
 1. Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
