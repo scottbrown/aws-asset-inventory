@@ -40,6 +40,15 @@ type Resource struct {
 	ARN              string            `json:"arn,omitempty"`
 	Configuration    json.RawMessage   `json:"configuration,omitempty"`
 	Tags             map[string]string `json:"tags,omitempty"`
+	Relationships    []Relationship    `json:"relationships,omitempty"`
+}
+
+// Relationship describes a link from one resource to another, as recorded by AWS Config.
+type Relationship struct {
+	ResourceType ResourceType `json:"resourceType"`
+	ResourceID   string       `json:"resourceId"`
+	ResourceName string       `json:"resourceName,omitempty"`
+	Name         string       `json:"relationshipName,omitempty"`
 }
 
 // Inventory holds the collection of AWS resources discovered across regions.

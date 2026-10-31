@@ -18,6 +18,7 @@ type mockConfigClient struct {
 	listDiscoveredResourcesFunc     func(ctx context.Context, params *configservice.ListDiscoveredResourcesInput, optFns ...func(*configservice.Options)) (*configservice.ListDiscoveredResourcesOutput, error)
 	batchGetResourceConfigFunc      func(ctx context.Context, params *configservice.BatchGetResourceConfigInput, optFns ...func(*configservice.Options)) (*configservice.BatchGetResourceConfigOutput, error)
 	getDiscoveredResourceCountsFunc func(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error)
+	selectResourceConfigFunc        func(ctx context.Context, params *configservice.SelectResourceConfigInput, optFns ...func(*configservice.Options)) (*configservice.SelectResourceConfigOutput, error)
 }
 
 func (m *mockConfigClient) ListDiscoveredResources(ctx context.Context, params *configservice.ListDiscoveredResourcesInput, optFns ...func(*configservice.Options)) (*configservice.ListDiscoveredResourcesOutput, error) {
@@ -39,6 +40,13 @@ func (m *mockConfigClient) GetDiscoveredResourceCounts(ctx context.Context, para
 		return m.getDiscoveredResourceCountsFunc(ctx, params, optFns...)
 	}
 	return &configservice.GetDiscoveredResourceCountsOutput{}, nil
+}
+
+func (m *mockConfigClient) SelectResourceConfig(ctx context.Context, params *configservice.SelectResourceConfigInput, optFns ...func(*configservice.Options)) (*configservice.SelectResourceConfigOutput, error) {
+	if m.selectResourceConfigFunc != nil {
+		return m.selectResourceConfigFunc(ctx, params, optFns...)
+	}
+	return &configservice.SelectResourceConfigOutput{}, nil
 }
 
 func TestNewCollector(t *testing.T) {

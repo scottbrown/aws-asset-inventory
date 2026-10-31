@@ -37,6 +37,7 @@ func TestRequiredPermissions(t *testing.T) {
 		"config:GetDiscoveredResourceCounts",
 		"config:ListDiscoveredResources",
 		"config:BatchGetResourceConfig",
+		"config:SelectResourceConfig",
 	}
 
 	if len(perms) != len(expected) {

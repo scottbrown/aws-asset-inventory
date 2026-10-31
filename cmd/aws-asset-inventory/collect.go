@@ -78,6 +78,9 @@ func runCollect(cmd *cobra.Command, args []string) error {
 	if collectConcurrency > 0 {
 		collector.MaxConcurrency = collectConcurrency
 	}
+	collector.WarnLogger = func(format string, args ...any) {
+		fmt.Fprintf(os.Stderr, "Warning: "+format+"\n", args...)
+	}
 	if collectVerbose {
 		collector.Logger = func(format string, args ...any) {
 			fmt.Fprintf(os.Stderr, format+"\n", args...)
