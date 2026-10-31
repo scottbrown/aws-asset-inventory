@@ -109,14 +109,21 @@ aws-asset-inventory serve --input inventory.json
 # Serving 1234 resources at http://127.0.0.1:8080 (press Ctrl+C to stop)
 ```
 
-Open the URL in a browser. Each resource is a sphere, coloured by service and sized by its number of relationships. Each AWS Config relationship is a line.
+Open the URL in a browser. Each AWS Config relationship is a line. Each resource is a 3D shape:
+
+- **Colour** shows the service (EC2, S3, IAM, …).
+- **Shape** shows the resource type. Common types have a shape that suggests what they are: instances are cubes, volumes and databases are cylinders, S3 buckets are buckets, security groups are rings. In one service, each other type gets a different shape.
+- **Outline** shapes are containers that hold other resources, such as VPCs, subnets, clusters and stacks.
+- **Size** shows the number of relationships.
+
+The **Resource types** list in the sidebar is the legend. It shows the shape and colour of each type, grouped by service, and you can use it to show or hide types.
 
 - **Fly** through the map: W/S forward and back, A/D left and right, R/F up and down, Q/E roll, arrow keys or drag to look. Use the Camera menu to change to orbit controls.
 - **Click** a resource to fly to it, highlight its relationships, and see its tags, relationships, and configuration.
 - **Find** a resource by name, ID, or type.
 - **Filter** by region and service, and hide resources with no relationships.
 
-Resources that are referred to by a relationship but are not in the inventory (for example, a resource type that AWS Config does not record) are shown as small grey spheres.
+Resources that are referred to by a relationship but are not in the inventory (for example, a resource type that AWS Config does not record) are shown as small grey shapes.
 
 The server listens on `127.0.0.1` only by default, because the inventory can contain sensitive data. All assets are embedded in the binary, so the viewer works offline.
 
@@ -220,6 +227,7 @@ task --list
 - `lint` - Run linter
 - `fmt` - Format code
 - `vet` - Run go vet
+- `vendor` - Rebuild the 3D viewer's JavaScript bundle from `tools/vendor` (needs Node.js)
 - `tidy` - Tidy go modules
 - `clean` - Remove build and test artifacts
 - `all` - Run fmt, vet, lint, test, and build
@@ -270,4 +278,4 @@ The markdown report includes:
 
 MIT
 
-The 3D viewer includes [3d-force-graph](https://github.com/vasturiano/3d-force-graph) (MIT licence), which bundles [three.js](https://threejs.org/) and other MIT-licensed libraries. See `awsassetinventory/web/vendor/3d-force-graph.LICENSE`.
+The 3D viewer includes a bundle of [3d-force-graph](https://github.com/vasturiano/3d-force-graph), [three.js](https://threejs.org/) and their dependencies, all under permissive licences. See `awsassetinventory/web/vendor/graph.LICENSES.txt`. To change their versions, edit `tools/vendor/package.json` and run `task vendor`.
