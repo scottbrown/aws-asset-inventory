@@ -6,7 +6,7 @@
     '#118ab2', '#f4a261', '#90be6d', '#e76f51', '#c77dff', '#43aa8b', '#f9c74f', '#577590',
   ];
   const OTHER_COLOR = '#9aa3b5';
-  const STUB_COLOR = '#3c4354';
+  const STUB_COLOR = '#5c6476';
   const DIM_COLOR = '#333a4a';
   const LINK_COLOR = 'rgba(160, 175, 210, 0.35)';
   const LINK_HIGHLIGHT = '#ffb547';
@@ -33,8 +33,9 @@
     byId: new Map(),
     neighbours: new Map(), // node ID -> Set of node IDs
     colors: new Map(),     // service -> colour
+    styles: new Map(),     // resource type -> { shape, container }
     regions: new Set(),
-    services: new Set(),
+    types: new Set(),
     showStubs: true,
     showIsolated: true,
     selected: null,
@@ -45,10 +46,7 @@
     .showNavInfo(false)
     .nodeId('id')
     .nodeLabel(nodeLabel)
-    .nodeColor(nodeColor)
-    .nodeVal((n) => (n.stub ? 0.5 : 1 + Math.sqrt(n.degree)))
-    .nodeOpacity(0.95)
-    .nodeResolution(10)
+    .nodeThreeObject(nodeObject)
     .linkLabel((l) => escapeHTML(l.label || ''))
     .linkColor((l) => (isHighlighted(l) ? LINK_HIGHLIGHT : LINK_COLOR))
     .linkWidth((l) => (isHighlighted(l) ? 0.6 : 0))
@@ -84,6 +82,7 @@
     }
 
     assignColors();
+    state.styles = AssetShapes.assign(state.nodes.map((n) => n.type));
     renderSummary(summary);
     renderFilters();
     renderSearchOptions();
@@ -129,10 +128,14 @@
   function renderFilters() {
     const real = state.nodes.filter((n) => !n.stub);
     renderChecklist('regions', countBy(state.nodes, (n) => n.region || 'global'), state.regions, null);
-    renderChecklist('services', countBy(real, (n) => n.service), state.services, (s) => state.colors.get(s));
+    renderTypes(real);
   }
 
-  function renderChecklist(containerId, counts, selected, colorOf) {
+  function countLabel(count) {
+    return el('span', { className: 'count', textContent: count.toLocaleString() });
+  }
+
+  function renderChecklist(containerId, counts, selected) {
     const container = $(containerId);
     container.replaceChildren();
     const entries = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
@@ -143,25 +146,79 @@
         box.checked ? selected.add(value) : selected.delete(value);
         applyFilters();
       });
-      const children = [box];
-      if (colorOf) {
-        const sw = el('span', { className: 'swatch' });
-        sw.style.background = colorOf(value);
-        children.push(sw);
-      }
-      children.push(value, el('span', { className: 'count', textContent: count.toLocaleString() }));
-      container.append(el('label', { className: 'check' }, children));
+      container.append(el('label', { className: 'check' }, [box, value, countLabel(count)]));
     }
+  }
+
+  // Lists the resource types grouped by service. It is both the legend and a filter.
+  function renderTypes(real) {
+    const byService = new Map();
+    for (const [type, count] of countBy(real, (n) => n.type)) {
+      const service = AssetShapes.serviceOf(type);
+      if (!byService.has(service)) byService.set(service, { total: 0, types: [] });
+      byService.get(service).total += count;
+      byService.get(service).types.push([type, count]);
+      state.types.add(type);
+    }
+
+    const container = $('types');
+    container.replaceChildren();
+    const services = [...byService.entries()].sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0]));
+    for (const [service, { total, types }] of services) {
+      const color = state.colors.get(service) || OTHER_COLOR;
+      const head = el('input', { type: 'checkbox', checked: true });
+      const swatch = el('span', { className: 'swatch' });
+      swatch.style.background = color;
+      const group = el('div', { className: 'group' }, [
+        el('label', { className: 'check service' }, [head, swatch, service, countLabel(total)]),
+      ]);
+
+      const boxes = [];
+      types.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      for (const [type, count] of types) {
+        const box = el('input', { type: 'checkbox', checked: true });
+        box.dataset.type = type;
+        boxes.push(box);
+        box.addEventListener('change', () => {
+          box.checked ? state.types.add(type) : state.types.delete(type);
+          syncHead();
+          applyFilters();
+        });
+        group.append(el('label', { className: 'check sub', title: type }, [
+          box, AssetShapes.glyph(state.styles.get(type), color), shortType(type), countLabel(count),
+        ]));
+      }
+
+      const syncHead = () => {
+        const on = boxes.filter((b) => b.checked).length;
+        head.checked = on === boxes.length;
+        head.indeterminate = on > 0 && on < boxes.length;
+      };
+      head.addEventListener('change', () => {
+        for (const box of boxes) {
+          box.checked = head.checked;
+          head.checked ? state.types.add(box.dataset.type) : state.types.delete(box.dataset.type);
+        }
+        applyFilters();
+      });
+      container.append(group);
+    }
+  }
+
+  function shortType(type) {
+    return type.split('::').slice(2).join('::') || type;
   }
 
   document.querySelectorAll('[data-all],[data-none]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.all || btn.dataset.none;
       const on = Boolean(btn.dataset.all);
-      const set = id === 'regions' ? state.regions : state.services;
+      const set = id === 'regions' ? state.regions : state.types;
       $(id).querySelectorAll('input').forEach((box) => {
         box.checked = on;
-        on ? set.add(box.value) : set.delete(box.value);
+        box.indeterminate = false;
+        const value = id === 'regions' ? box.value : box.dataset.type;
+        if (value) on ? set.add(value) : set.delete(value);
       });
       applyFilters();
     });
@@ -172,7 +229,7 @@
 
   function nodeVisible(n) {
     if (n.stub && !state.showStubs) return false;
-    if (!n.stub && !state.services.has(n.service)) return false;
+    if (!n.stub && !state.types.has(n.type)) return false;
     if (!state.regions.has(n.region || 'global')) return false;
     return true;
   }
@@ -284,13 +341,34 @@
     return s === state.selected.id || t === state.selected.id;
   }
 
+  function baseColor(n) {
+    return n.stub ? STUB_COLOR : state.colors.get(n.service) || OTHER_COLOR;
+  }
+
   function nodeColor(n) {
     if (state.selected) {
       const near = n === state.selected || state.neighbours.get(state.selected.id).has(n.id);
       if (!near) return DIM_COLOR;
       if (n === state.selected) return '#ffffff';
     }
-    return n.stub ? STUB_COLOR : state.colors.get(n.service) || OTHER_COLOR;
+    return baseColor(n);
+  }
+
+  function nodeStyle(n) {
+    return state.styles.get(n.type) || { shape: 'sphere', container: false };
+  }
+
+  function nodeObject(n) {
+    const style = nodeStyle(n);
+    let radius = n.stub ? 2.5 : 4 * Math.cbrt(1 + Math.sqrt(n.degree));
+    if (style.container) radius *= 1.5;
+    const obj = AssetShapes.create(style, radius);
+    AssetShapes.paint(obj, nodeColor(n));
+    return obj;
+  }
+
+  function glyphFor(n) {
+    return AssetShapes.glyph(nodeStyle(n), baseColor(n));
   }
 
   function nodeLabel(n) {
@@ -304,7 +382,10 @@
   }
 
   function refreshStyles() {
-    graph.nodeColor(graph.nodeColor()).linkColor(graph.linkColor()).linkWidth(graph.linkWidth());
+    for (const n of graph.graphData().nodes) {
+      if (n.__threeObj) AssetShapes.paint(n.__threeObj, nodeColor(n));
+    }
+    graph.linkColor(graph.linkColor()).linkWidth(graph.linkWidth());
   }
 
   function select(n) {
@@ -320,7 +401,7 @@
 
   async function showDetails(n) {
     $('details').hidden = false;
-    $('details-title').textContent = displayName(n);
+    $('details-title').replaceChildren(glyphFor(n), displayName(n));
 
     const fields = [
       ['Type', n.type],
@@ -383,7 +464,7 @@
 
     const visible = new Set(graph.graphData().nodes);
     const items = related.map(({ label, other }) => {
-      const btn = el('button', { type: 'button', textContent: displayName(other), disabled: !visible.has(other) });
+      const btn = el('button', { type: 'button', disabled: !visible.has(other) }, [glyphFor(other), displayName(other)]);
       btn.title = visible.has(other) ? other.type : `${other.type} (hidden by filters)`;
       btn.addEventListener('click', () => select(other));
       return el('li', {}, [

@@ -64,6 +64,18 @@ tasks:
     cmds:
       - go mod tidy
 
+  vendor:
+    desc: Rebuild the 3D viewer's JavaScript bundle (needs Node.js)
+    dir: tools/vendor
+    cmds:
+      - npm ci --no-audit --no-fund
+      - npm run build
+    sources:
+      - tools/vendor/package-lock.json
+      - tools/vendor/entry.js
+    generates:
+      - awsassetinventory/web/vendor/graph.min.js
+
   clean:
     desc: Remove build and test artifacts
     cmds:
