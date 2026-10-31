@@ -18,12 +18,14 @@ var rootCmd = &cobra.Command{
 	Long: `A CLI tool that collects all resources AWS Config knows about
 across specified regions and generates inventory reports.
 
-Use subcommands to collect resources, generate reports, or view permissions.`,
+Use subcommands to collect resources, generate reports, explore resources in a
+3D map, or view permissions.`,
 }
 
 func init() {
 	rootCmd.AddCommand(collectCmd)
 	rootCmd.AddCommand(reportCmd)
+	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(permissionsCmd)
 }

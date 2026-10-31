@@ -22,5 +22,6 @@ func requiredPermissions() []string {
 		"config:GetDiscoveredResourceCounts",
 		"config:ListDiscoveredResources",
 		"config:BatchGetResourceConfig",
+		"config:SelectResourceConfig",
 	}
 }

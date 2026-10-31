@@ -7,10 +7,12 @@ A CLI tool that collects AWS resources from AWS Config across specified regions 
 - Collects all resources tracked by AWS Config
 - Supports multiple AWS regions
 - Outputs raw inventory as JSON
+- Records how resources relate to each other (for example, instance → subnet → VPC) and their tags
 - Generates markdown summary reports with:
   - Resource counts by type
   - Resource counts by region
   - Detailed resource listings
+- Serves an interactive 3D map of the inventory that you can fly through in the browser
 
 ## Prerequisites
 
@@ -32,7 +34,8 @@ At minimum, the caller needs the following AWS Config permissions:
       "Action": [
         "config:GetDiscoveredResourceCounts",
         "config:ListDiscoveredResources",
-        "config:BatchGetResourceConfig"
+        "config:BatchGetResourceConfig",
+        "config:SelectResourceConfig"
       ],
       "Resource": "*"
     }
@@ -41,6 +44,8 @@ At minimum, the caller needs the following AWS Config permissions:
 ```
 
 Note: If you collect across multiple regions, these permissions must apply in each target region.
+
+`config:SelectResourceConfig` is used to get relationships and tags. Without it, collection still works, but the tool prints a warning for each region and the inventory has no relationships.
 
 ## Installation
 
@@ -95,6 +100,26 @@ aws-asset-inventory report --input inventory.json --output report.md
 aws-asset-inventory report --input inventory.json --output report.md --include-details
 ```
 
+### Explore in 3D
+
+Start a local web server that shows the inventory as a 3D map:
+
+```bash
+aws-asset-inventory serve --input inventory.json
+# Serving 1234 resources at http://127.0.0.1:8080 (press Ctrl+C to stop)
+```
+
+Open the URL in a browser. Each resource is a sphere, coloured by service and sized by its number of relationships. Each AWS Config relationship is a line.
+
+- **Fly** through the map: W/S forward and back, A/D left and right, R/F up and down, Q/E roll, arrow keys or drag to look. Use the Camera menu to change to orbit controls.
+- **Click** a resource to fly to it, highlight its relationships, and see its tags, relationships, and configuration.
+- **Find** a resource by name, ID, or type.
+- **Filter** by region and service, and hide resources with no relationships.
+
+Resources that are referred to by a relationship but are not in the inventory (for example, a resource type that AWS Config does not record) are shown as small grey spheres.
+
+The server listens on `127.0.0.1` only by default, because the inventory can contain sensitive data. All assets are embedded in the binary, so the viewer works offline.
+
 ### Other Commands
 
 ```bash
@@ -114,6 +139,9 @@ aws-asset-inventory collect --profile myprofile --regions us-east-1,us-west-2 --
 # Step 2: Generate reports (fast, can run multiple times)
 aws-asset-inventory report --input inventory.json --output summary.md
 aws-asset-inventory report --input inventory.json --output detailed.md --include-details
+
+# Step 3: Explore the inventory in 3D
+aws-asset-inventory serve --input inventory.json
 ```
 
 ## Subcommands
@@ -139,6 +167,15 @@ Generate a markdown report from inventory JSON.
 | `--input` | `-i` | Yes | Input JSON inventory file |
 | `--output` | `-o` | No | Output file path (default: stdout) |
 | `--include-details` | | No | Include resource details in report |
+
+### serve
+
+Start a web server that shows inventory JSON as an interactive 3D map.
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--input` | `-i` | Yes | Input JSON inventory file |
+| `--listen` | `-l` | No | Address to listen on (default `127.0.0.1:8080`). A non-loopback address makes the inventory readable by anyone who can reach it. |
 
 ### version
 
@@ -206,7 +243,15 @@ The JSON output contains the raw inventory data in a structure compatible with A
       "awsRegion": "us-east-1",
       "accountId": "123456789012",
       "arn": "arn:aws:ec2:us-east-1:123456789012:instance/i-12345",
-      "configuration": { ... }
+      "configuration": { ... },
+      "tags": { "Name": "my-instance" },
+      "relationships": [
+        {
+          "resourceType": "AWS::EC2::VPC",
+          "resourceId": "vpc-12345",
+          "relationshipName": "Is contained in Vpc"
+        }
+      ]
     }
   ]
 }
@@ -224,3 +269,5 @@ The markdown report includes:
 ## Licence
 
 MIT
+
+The 3D viewer includes [3d-force-graph](https://github.com/vasturiano/3d-force-graph) (MIT licence), which bundles [three.js](https://threejs.org/) and other MIT-licensed libraries. See `awsassetinventory/web/vendor/3d-force-graph.LICENSE`.

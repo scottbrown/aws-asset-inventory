@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AWS Asset Map</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="graph"></div>
+
+  <aside id="sidebar" class="panel">
+    <header>
+      <h1>AWS Asset Map</h1>
+      <p id="summary" class="muted">Loading inventory…</p>
+    </header>
+
+    <p id="notice" class="notice" hidden></p>
+
+    <section>
+      <label for="search" class="label">Find a resource</label>
+      <input id="search" type="search" list="search-options" placeholder="Name, ID or type" autocomplete="off">
+      <datalist id="search-options"></datalist>
+    </section>
+
+    <section>
+      <label for="controls" class="label">Camera</label>
+      <select id="controls">
+        <option value="fly">Fly</option>
+        <option value="orbit">Orbit</option>
+        <option value="trackball">Trackball</option>
+      </select>
+      <p id="controls-help" class="muted small"></p>
+    </section>
+
+    <section>
+      <span class="label">Show</span>
+      <label class="check"><input id="show-stubs" type="checkbox" checked> Referenced resources not in inventory</label>
+      <label class="check"><input id="show-isolated" type="checkbox" checked> Resources with no relationships</label>
+    </section>
+
+    <section class="grow">
+      <div class="row">
+        <span class="label">Regions</span>
+        <span class="links"><button type="button" data-all="regions">All</button> <button type="button" data-none="regions">None</button></span>
+      </div>
+      <div id="regions" class="checklist"></div>
+    </section>
+
+    <section class="grow">
+      <div class="row">
+        <span class="label">Services</span>
+        <span class="links"><button type="button" data-all="services">All</button> <button type="button" data-none="services">None</button></span>
+      </div>
+      <div id="services" class="checklist"></div>
+    </section>
+  </aside>
+
+  <aside id="details" class="panel" hidden>
+    <div class="row">
+      <h2 id="details-title"></h2>
+      <button id="details-close" type="button" class="close" aria-label="Close">×</button>
+    </div>
+    <dl id="details-fields"></dl>
+    <div id="details-tags"></div>
+    <div id="details-relationships"></div>
+    <details id="details-config-wrap">
+      <summary>Configuration</summary>
+      <pre id="details-config"></pre>
+    </details>
+  </aside>
+
+  <script src="vendor/3d-force-graph.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

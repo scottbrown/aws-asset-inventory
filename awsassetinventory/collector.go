@@ -16,6 +16,7 @@ type ConfigClient interface {
 	ListDiscoveredResources(ctx context.Context, params *configservice.ListDiscoveredResourcesInput, optFns ...func(*configservice.Options)) (*configservice.ListDiscoveredResourcesOutput, error)
 	BatchGetResourceConfig(ctx context.Context, params *configservice.BatchGetResourceConfigInput, optFns ...func(*configservice.Options)) (*configservice.BatchGetResourceConfigOutput, error)
 	GetDiscoveredResourceCounts(ctx context.Context, params *configservice.GetDiscoveredResourceCountsInput, optFns ...func(*configservice.Options)) (*configservice.GetDiscoveredResourceCountsOutput, error)
+	SelectResourceConfig(ctx context.Context, params *configservice.SelectResourceConfigInput, optFns ...func(*configservice.Options)) (*configservice.SelectResourceConfigOutput, error)
 }
 
 // ConfigClientFactory creates ConfigClient instances for specific regions.
@@ -29,8 +30,9 @@ type Collector struct {
 	profile        string
 	clientFactory  ConfigClientFactory
 	Logger         Logger
-	MaxConcurrency int // 0 means use default (5)
-	MaxRetries     int // 0 means use default (3)
+	WarnLogger     Logger // receives non-fatal problems, such as missing relationship data
+	MaxConcurrency int    // 0 means use default (5)
+	MaxRetries     int    // 0 means use default (3)
 }
 
 func (c *Collector) maxConcurrency() int {
@@ -136,6 +138,18 @@ func (c *Collector) collectRegion(ctx context.Context, region Region) ([]Resourc
 			c.Logger("[%s] Collected %d %s", region, len(rtResources), rt)
 		}
 		resources = append(resources, rtResources...)
+	}
+
+	metadata, err := c.collectMetadata(ctx, client)
+	if err != nil {
+		if c.WarnLogger != nil {
+			c.WarnLogger("[%s] Could not collect relationships and tags: %v", region, err)
+		}
+	} else {
+		applyMetadata(resources, metadata)
+		if c.Logger != nil {
+			c.Logger("[%s] Collected relationships and tags for %d resources", region, len(metadata))
+		}
 	}
 
 	if c.Logger != nil {
