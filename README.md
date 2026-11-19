@@ -16,7 +16,7 @@ A CLI tool that collects AWS resources from AWS Config across specified regions 
 
 ## Prerequisites
 
-- Go 1.23 or later
+- Go 1.27.4 or later
 - [Task](https://taskfile.dev/) (optional, for build automation)
 - AWS credentials configured with access to AWS Config
 - AWS Config must be enabled in each target region you query
